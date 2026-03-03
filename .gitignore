@@ -1,0 +1,11 @@
+# Private config (API keys, personal paths)
+local/
+.env
+
+# OS
+.DS_Store
+
+# Cache
+token-cache.json
+node_modules/
+__pycache__/

@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>小红书图片 - 赛博养鸟</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #111;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 20px 80px;
+    padding-top: 70px;
+    font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  .slide {
+    width: 540px;
+    height: 720px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    margin-bottom: 40px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+
+  .bg-dark {
+    position: absolute; inset: 0;
+    background: #1A3328;
+  }
+  .bg-dark::after {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 80% 15%, rgba(255,255,255,0.03) 0%, transparent 50%),
+      radial-gradient(circle at 20% 85%, rgba(0,0,0,0.08) 0%, transparent 50%);
+  }
+
+  .bg-light {
+    position: absolute; inset: 0;
+    background: #F2EDE3;
+  }
+
+  .brand-tag {
+    position: absolute; top: 24px; left: 28px;
+    display: flex; align-items: center; gap: 8px; z-index: 3;
+  }
+  .brand-tag svg { width: 22px; height: 22px; }
+  .brand-tag span {
+    font-size: 12px; font-weight: 600; letter-spacing: 1px;
+  }
+  .brand-tag.light span { color: rgba(255,255,255,0.5); }
+  .brand-tag.dark span { color: rgba(26,51,40,0.4); }
+
+  .page-num {
+    position: absolute; bottom: 24px; right: 28px;
+    font-size: 12px; z-index: 3;
+  }
+  .page-num.light { color: rgba(255,255,255,0.2); }
+  .page-num.dark { color: rgba(26,51,40,0.2); }
+
+  .content {
+    position: absolute; inset: 0;
+    padding: 28px;
+    display: flex; flex-direction: column;
+    z-index: 2;
+  }
+
+  .cover-content {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 60px 40px;
+  }
+  .cover-title {
+    font-size: 40px; font-weight: 900; color: #F2EDE3;
+    line-height: 1.4; letter-spacing: 2px;
+    margin-bottom: 24px;
+  }
+  .cover-sub {
+    font-size: 16px; color: rgba(242,237,227,0.45);
+    line-height: 1.8; letter-spacing: 1px;
+  }
+  .cover-accent {
+    width: 48px; height: 3px;
+    background: #C44536; border-radius: 2px;
+    margin: 28px auto;
+  }
+  .cover-hook {
+    font-size: 20px; font-weight: 600; color: rgba(242,237,227,0.8);
+    line-height: 1.6; letter-spacing: 1px;
+  }
+
+  .slide-title {
+    font-size: 26px; font-weight: 800; color: #F2EDE3;
+    line-height: 1.3; margin-bottom: 6px; letter-spacing: 1px;
+  }
+  .slide-title.dark { color: #1A3328; }
+
+  .slide-subtitle {
+    font-size: 13px; color: rgba(242,237,227,0.4);
+    margin-bottom: 20px; letter-spacing: 1px;
+  }
+  .slide-subtitle.dark { color: rgba(26,51,40,0.4); }
+
+  .accent-bar {
+    width: 36px; height: 3px;
+    background: #C44536; border-radius: 2px;
+    margin-bottom: 20px;
+  }
+
+  .text-block {
+    font-size: 15px; color: rgba(242,237,227,0.8);
+    line-height: 2; letter-spacing: 0.5px;
+  }
+  .text-block.dark { color: #333; }
+  .text-block strong { color: #F2EDE3; font-weight: 700; }
+  .text-block.dark strong { color: #1A3328; font-weight: 700; }
+  .text-block .red { color: #C44536; font-weight: 700; }
+
+  .info-row {
+    display: flex; align-items: center;
+    padding: 12px 16px; border-radius: 8px;
+    margin-bottom: 8px;
+  }
+  .info-row.on-dark { background: rgba(255,255,255,0.06); }
+  .info-row.on-light { background: rgba(26,51,40,0.06); }
+  .info-row .label {
+    font-size: 13px; font-weight: 700; min-width: 70px;
+    color: #C44536;
+  }
+  .info-row .value {
+    font-size: 13px; flex: 1;
+  }
+  .info-row.on-dark .value { color: rgba(242,237,227,0.7); }
+  .info-row.on-light .value { color: #555; }
+
+  .step {
+    display: flex; gap: 14px; margin-bottom: 14px;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #C44536; color: #F2EDE3;
+    font-size: 14px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 2px;
+  }
+  .step-text {
+    font-size: 14px; line-height: 1.7;
+  }
+  .step-text.on-dark { color: rgba(242,237,227,0.8); }
+  .step-text.on-light { color: #444; }
+  .step-text strong { font-weight: 700; }
+  .step-text.on-dark strong { color: #F2EDE3; }
+  .step-text.on-light strong { color: #1A3328; }
+
+  .cta-box {
+    border: 1px solid rgba(242,237,227,0.2); border-radius: 10px;
+    padding: 16px 20px; text-align: center; margin-top: 12px;
+  }
+  .cta-box .cta-label {
+    font-size: 11px; color: rgba(242,237,227,0.3);
+    margin-bottom: 6px; letter-spacing: 2px;
+  }
+  .cta-box .cta-url {
+    font-size: 13px; color: #C44536; font-weight: 600;
+    word-break: break-all;
+  }
+
+  .spacer { flex: 1; }
+
+  .toolbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(17,17,17,0.95); backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding: 12px 20px; display: flex; align-items: center;
+    justify-content: center; gap: 12px;
+  }
+  .toolbar .btn {
+    background: #1A3328; color: #F2EDE3; border: none;
+    padding: 10px 24px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer;
+  }
+  .toolbar .btn.accent { background: #C44536; }
+  .toolbar .progress {
+    font-size: 13px; color: rgba(255,255,255,0.5);
+    min-width: 100px; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button class="btn accent" onclick="downloadAll()">全部下载 (ZIP)</button>
+  <button class="btn" onclick="downloadOne()">下载当前</button>
+  <span class="progress" id="progress"></span>
+</div>
+
+<!-- 第 1 张：封面 -->
+<div class="slide">
+  <div class="bg-dark"></div>
+  <div class="brand-tag light">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(255,255,255,0.5)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="#F2EDE3"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content cover-content">
+    <div class="cover-title" style="font-size:38px;">拍到的鸟<br>现在可以<br>"养"起来了</div>
+    <div class="cover-accent"></div>
+    <div class="cover-hook" style="font-size:18px;">上传照片，AI 识别生成图鉴<br>还能把它们放进电子森林里<br>看着小鸟飞来飞去，太治愈了</div>
+    <div style="height:24px"></div>
+    <div style="font-size:64px;">🐦</div>
+  </div>
+  <div class="page-num light">1/10</div>
+</div>
+
+<!-- 第 2 张：先看结果 -->
+<div class="slide">
+  <div class="bg-light"></div>
+  <div class="brand-tag dark">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(26,51,40,0.4)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(26,51,40,0.25)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="white"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(26,51,40,0.4)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(26,51,40,0.4)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(26,51,40,0.4)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:60px;">
+    <div class="slide-title dark">先看结果</div>
+    <div class="slide-subtitle dark">我已经迫不及待地试了一下</div>
+    <div class="accent-bar"></div>
+    <div class="text-block dark" style="margin-bottom:14px;">
+      拍到鸟后上传，<span class="red">AI 自动识别</span>是什么鸟<br>
+      然后生成专属图鉴形象<br>
+      <strong>完全不懂鸟也没关系！</strong>
+    </div>
+    <div style="background:#1A3328;border-radius:12px;padding:20px;margin-bottom:14px;">
+      <div style="color:rgba(242,237,227,0.4);font-size:11px;letter-spacing:2px;margin-bottom:12px;">我的图鉴</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <div style="text-align:center;">
+          <div style="font-size:40px;margin-bottom:4px;">🦉</div>
+          <div style="font-size:11px;color:rgba(242,237,227,0.6);">夜鹭</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:40px;margin-bottom:4px;">🐦</div>
+          <div style="font-size:11px;color:rgba(242,237,227,0.6);">山雀</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:40px;margin-bottom:4px;">🕊️</div>
+          <div style="font-size:11px;color:rgba(242,237,227,0.6);">白鹭</div>
+        </div>
+      </div>
+    </div>
+    <div class="info-row on-light"><div class="label">自动识别</div><div class="value">基于《中国观鸟指南》</div></div>
+    <div class="info-row on-light"><div class="label">生成图鉴</div><div class="value">每只鸟都有专属形象</div></div>
+    <div class="info-row on-light"><div class="label">照片归档</div><div class="value">同种鸟自动归类</div></div>
+    <div class="spacer"></div>
+    <div style="text-align:center;color:rgba(26,51,40,0.4);font-size:12px;">
+      收集癖狂喜
+    </div>
+  </div>
+  <div class="page-num dark">2/10</div>
+</div>
+
+<!-- 第 3 张：怎么玩 -->
+<div class="slide">
+  <div class="bg-dark"></div>
+  <div class="brand-tag light">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(255,255,255,0.5)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="#F2EDE3"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:56px;">
+    <div class="slide-title">超简单，三步就行</div>
+    <div class="accent-bar"></div>
+    <div style="height:12px"></div>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text on-dark"><strong>上传照片</strong><br>随便拍的都行，AI 会识别</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text on-dark"><strong>自动生成图鉴</strong><br>AI 识别鸟种，生成专属形象和介绍</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text on-dark"><strong>放进森林</strong><br>把收集的鸟放进电子森林，看它们飞</div>
+    </div>
+    <div style="height:20px"></div>
+    <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:20px;">
+      <div style="font-size:14px;color:rgba(242,237,227,0.8);line-height:1.8;margin-bottom:10px;">
+        每次上传某种鸟的照片<br>会自动归类到已有图鉴下
+      </div>
+      <div style="font-size:13px;color:#C44536;font-weight:600;">
+        形成专属相册
+      </div>
+    </div>
+  </div>
+  <div class="page-num light">3/10</div>
+</div>
+
+<!-- 第 4 张：夜师傅 -->
+<div class="slide">
+  <div class="bg-light"></div>
+  <div class="brand-tag dark">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(26,51,40,0.4)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(26,51,40,0.25)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="white"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(26,51,40,0.4)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(26,51,40,0.4)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(26,51,40,0.4)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:56px;">
+    <div class="slide-title dark">夜师傅，鸟圈大明星</div>
+    <div class="slide-subtitle dark">第一个上传的当然是它</div>
+    <div class="accent-bar"></div>
+    <div style="background:#1A3328;border-radius:12px;padding:24px;margin-bottom:16px;text-align:center;">
+      <div style="font-size:80px;margin-bottom:12px;">🦉</div>
+      <div style="font-size:18px;color:#F2EDE3;font-weight:700;margin-bottom:8px;">夜鹭</div>
+      <div style="font-size:12px;color:rgba(242,237,227,0.5);">Black-crowned Night Heron</div>
+    </div>
+    <div class="text-block dark" style="margin-bottom:16px;font-size:14px;">
+      不得不说，夜师傅的图鉴形象<br>
+      也透露着<span class="red">一丝猥琐</span>……<br><br>
+      系统生成了一堆介绍<br>
+      夜师傅的分布真是<strong>非常广泛</strong><br>
+      不愧是世界上照片最多的鸟（？）
+    </div>
+    <div style="background:rgba(26,51,40,0.06);border-radius:8px;padding:14px;text-align:center;">
+      <span style="font-size:12px;color:rgba(26,51,40,0.5);">谁能拒绝在夜师傅图鉴下<br>上传各种抽象夜鹭图呢？！</span>
+    </div>
+  </div>
+  <div class="page-num dark">4/10</div>
+</div>
+
+<!-- 第 5 张：收集乐趣 -->
+<div class="slide">
+  <div class="bg-dark"></div>
+  <div class="brand-tag light">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(255,255,255,0.5)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="#F2EDE3"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:56px;">
+    <div class="slide-title">山雀！我的最爱</div>
+    <div class="slide-subtitle">图鉴形象也太可爱了</div>
+    <div class="accent-bar"></div>
+    <div style="background:rgba(255,255,255,0.06);border-radius:12px;padding:20px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:16px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:8px;">🐦</div>
+          <div style="font-size:14px;color:#F2EDE3;font-weight:700;margin-bottom:4px;">大山雀</div>
+          <div style="font-size:11px;color:rgba(242,237,227,0.4);">圆滚滚</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:16px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:8px;">🐦</div>
+          <div style="font-size:14px;color:#F2EDE3;font-weight:700;margin-bottom:4px;">煤山雀</div>
+          <div style="font-size:11px;color:rgba(242,237,227,0.4);">小肥啾</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:16px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:8px;">🐦</div>
+          <div style="font-size:14px;color:#F2EDE3;font-weight:700;margin-bottom:4px;">黄腹山雀</div>
+          <div style="font-size:11px;color:rgba(242,237,227,0.4);">黄肚皮</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:16px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:8px;">❓</div>
+          <div style="font-size:14px;color:rgba(242,237,227,0.5);font-weight:700;margin-bottom:4px;">待解锁</div>
+          <div style="font-size:11px;color:rgba(242,237,227,0.3);">继续拍</div>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.04);border-radius:10px;">
+      <div style="font-size:16px;color:#C44536;font-weight:700;margin-bottom:8px;">我一定要集齐所有的山雀</div>
+      <div style="font-size:13px;color:rgba(242,237,227,0.6);">然后把这群小肥啾全部放进森林里</div>
+    </div>
+  </div>
+  <div class="page-num light">5/10</div>
+</div>
+
+<!-- 第 6 张：电子森林 -->
+<div class="slide">
+  <div class="bg-light"></div>
+  <div class="brand-tag dark">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(26,51,40,0.4)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(26,51,40,0.25)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="white"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(26,51,40,0.4)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(26,51,40,0.4)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(26,51,40,0.4)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:56px;">
+    <div class="slide-title dark">看鸟飞，太治愈了</div>
+    <div class="slide-subtitle dark">最酷的功能</div>
+    <div class="accent-bar"></div>
+    <div style="background:#1A3328;border-radius:12px;padding:24px;margin-bottom:16px;position:relative;overflow:hidden;height:280px;">
+      <div style="position:absolute;top:20px;left:30px;font-size:32px;animation:fly1 4s ease-in-out infinite;">🐦</div>
+      <div style="position:absolute;top:80px;right:40px;font-size:28px;animation:fly2 5s ease-in-out infinite;">🦉</div>
+      <div style="position:absolute;bottom:60px;left:60px;font-size:24px;animation:fly3 6s ease-in-out infinite;">🕊️</div>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+        <div style="font-size:48px;margin-bottom:12px;">🌲</div>
+        <div style="font-size:14px;color:rgba(242,237,227,0.6);">我的电子森林</div>
+      </div>
+    </div>
+    <div class="text-block dark" style="margin-bottom:16px;">
+      把收集的鸟放进森林<br>
+      它们<span class="red">真的会飞来飞去</span><br><br>
+      就这么看着小鸟们飞<br>
+      <strong>实在是太治愈了</strong>
+    </div>
+    <div style="background:rgba(26,51,40,0.06);border-radius:8px;padding:14px;text-align:center;">
+      <span style="font-size:12px;color:rgba(26,51,40,0.5);">拍鸟欲望持续增加中！</span>
+    </div>
+  </div>
+  <div class="page-num dark">6/10</div>
+</div>
+
+<style>
+@keyframes fly1 {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(30px, 20px); }
+}
+@keyframes fly2 {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-25px, 15px); }
+}
+@keyframes fly3 {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(20px, -25px); }
+}
+</style>
+
+<!-- 第 7 张：解锁地图 -->
+<div class="slide">
+  <div class="bg-dark"></div>
+  <div class="brand-tag light">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(255,255,255,0.5)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="#F2EDE3"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:56px;">
+    <div class="slide-title">收集越多，解锁越多</div>
+    <div class="slide-subtitle">不同风格的森林</div>
+    <div class="accent-bar"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:16px;">
+        <div style="font-size:28px;margin-bottom:8px;">🌲</div>
+        <div style="font-size:13px;color:#F2EDE3;font-weight:700;margin-bottom:4px;">基础森林</div>
+        <div style="font-size:10px;color:rgba(242,237,227,0.4);line-height:1.6;">初始森林<br>✅ 已解锁</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:16px;">
+        <div style="font-size:28px;margin-bottom:8px;">🏛️</div>
+        <div style="font-size:13px;color:#F2EDE3;font-weight:700;margin-bottom:4px;">遗迹花园</div>
+        <div style="font-size:10px;color:rgba(242,237,227,0.4);line-height:1.6;">童话风格<br>🔒 需要10种鸟</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:16px;">
+        <div style="font-size:28px;margin-bottom:8px;">🌸</div>
+        <div style="font-size:13px;color:#F2EDE3;font-weight:700;margin-bottom:4px;">樱花林</div>
+        <div style="font-size:10px;color:rgba(242,237,227,0.4);line-height:1.6;">粉色浪漫<br>🔒 需要15种鸟</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.06);border-radius:10px;padding:16px;">
+        <div style="font-size:28px;margin-bottom:8px;">🌙</div>
+        <div style="font-size:13px;color:#F2EDE3;font-weight:700;margin-bottom:4px;">夜之森</div>
+        <div style="font-size:10px;color:rgba(242,237,227,0.4);line-height:1.6;">神秘氛围<br>🔒 需要20种鸟</div>
+      </div>
+    </div>
+    <div style="background:rgba(196,69,54,0.1);border:1px solid rgba(196,69,54,0.2);border-radius:10px;padding:16px;text-align:center;">
+      <div style="font-size:14px;color:#C44536;font-weight:700;margin-bottom:6px;">我现在最期待的</div>
+      <div style="font-size:13px;color:rgba(242,237,227,0.7);">就是遗迹花园这个地图<br>好像童话里的森林</div>
+    </div>
+  </div>
+  <div class="page-num light">7/10</div>
+</div>
+
+<!-- 第 8 张：背后技术 -->
+<div class="slide">
+  <div class="bg-light"></div>
+  <div class="brand-tag dark">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(26,51,40,0.4)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(26,51,40,0.25)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="white"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(26,51,40,0.4)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(26,51,40,0.4)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(26,51,40,0.4)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:56px;">
+    <div class="slide-title dark">AI 怎么认识这些鸟的？</div>
+    <div class="slide-subtitle dark">500页的《中国观鸟指南》</div>
+    <div class="accent-bar"></div>
+    <div class="text-block dark" style="margin-bottom:16px;">
+      用了一个叫 <span class="red">pdf2skills</span> 的工具<br>
+      把《中国观鸟指南》变成 AI 可读的 Skills<br><br>
+      这样 AI 就能<strong>"读懂"这本书</strong><br>
+      知道每种鸟的特征、习性、分布
+    </div>
+    <div style="background:#1A3328;border-radius:12px;padding:20px;margin-bottom:16px;">
+      <div style="color:rgba(242,237,227,0.4);font-size:11px;letter-spacing:2px;margin-bottom:12px;">转化流程</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px;">
+        <div style="background:rgba(255,255,255,0.1);border-radius:8px;padding:12px 16px;text-align:center;">
+          <div style="font-size:24px;">📖</div>
+          <div style="font-size:12px;color:rgba(242,237,227,0.7);margin-top:4px;">观鸟指南</div>
+        </div>
+        <div style="color:rgba(242,237,227,0.3);font-size:18px;">→</div>
+        <div style="background:rgba(255,255,255,0.1);border-radius:8px;padding:12px 16px;text-align:center;">
+          <div style="font-size:24px;">⚙️</div>
+          <div style="font-size:12px;color:rgba(242,237,227,0.7);margin-top:4px;">pdf2skills</div>
+        </div>
+        <div style="color:rgba(242,237,227,0.3);font-size:18px;">→</div>
+        <div style="background:rgba(196,69,54,0.2);border:1px solid rgba(196,69,54,0.3);border-radius:8px;padding:12px 16px;text-align:center;">
+          <div style="font-size:24px;">🎯</div>
+          <div style="font-size:12px;color:#C44536;margin-top:4px;font-weight:600;">Skills</div>
+        </div>
+      </div>
+    </div>
+    <div style="background:rgba(26,51,40,0.06);border-radius:8px;padding:14px;text-align:center;">
+      <span style="font-size:12px;color:rgba(26,51,40,0.5);">所以完全不懂鸟也能玩</span>
+    </div>
+  </div>
+  <div class="page-num dark">8/10</div>
+</div>
+
+<!-- 第 9 张：开发速度 -->
+<div class="slide">
+  <div class="bg-dark"></div>
+  <div class="brand-tag light">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(255,255,255,0.5)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="#F2EDE3"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="justify-content:center;align-items:center;text-align:center;padding:60px 36px;">
+    <div style="font-size:14px;color:rgba(242,237,227,0.3);letter-spacing:3px;margin-bottom:40px;">听说</div>
+    <div style="display:flex;align-items:baseline;gap:16px;justify-content:center;margin-bottom:40px;">
+      <div style="font-size:80px;font-weight:900;color:#C44536;">3</div>
+      <div style="font-size:28px;font-weight:800;color:#F2EDE3;">天</div>
+    </div>
+    <div style="font-size:18px;color:rgba(242,237,227,0.8);line-height:2;margin-bottom:40px;">
+      就做出来了<br>
+      用书生成的技能做的
+    </div>
+    <div style="font-size:15px;color:rgba(242,237,227,0.5);line-height:2;">
+      这就是"让书活过来"的感觉<br>
+      不是读完就完了<br>
+      而是<strong style="color:rgba(242,237,227,0.8);">真的能用起来</strong>
+    </div>
+  </div>
+  <div class="page-num light">9/10</div>
+</div>
+
+<!-- 第 10 张：行动召唤 -->
+<div class="slide">
+  <div class="bg-dark"></div>
+  <div class="brand-tag light">
+    <svg viewBox="0 0 32 32" fill="none">
+      <circle cx="13" cy="16" r="10" stroke="rgba(255,255,255,0.5)" stroke-width="2.2" fill="none"/>
+      <ellipse cx="13" cy="8.5" rx="7" ry="1.5" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" fill="none"/>
+      <ellipse cx="14" cy="17" rx="3.5" ry="2" fill="#C44536"/>
+      <polygon points="10,17 7.5,14.5 7.5,19.5" fill="#C44536"/>
+      <circle cx="16" cy="16.3" r="0.7" fill="#F2EDE3"/>
+      <line x1="26" y1="4" x2="26" y2="16" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 16 Q26 22 22 22" stroke="rgba(255,255,255,0.5)" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="26" cy="4" r="2" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <span>01fish</span>
+  </div>
+  <div class="content" style="padding-top:56px;">
+    <div class="slide-title">来建设你的异鸟园吧</div>
+    <div class="accent-bar"></div>
+
+    <div class="cta-box" style="margin-bottom:12px;">
+      <div class="cta-label">观鸟图鉴收集器</div>
+      <div class="cta-url">链接见评论区</div>
+    </div>
+    <div class="cta-box" style="margin-bottom:12px;">
+      <div class="cta-label">pdf2skills 工具</div>
+      <div class="cta-url">pdf2skills.memect.cn</div>
+    </div>
+
+    <div style="height:16px"></div>
+
+    <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.04);border-radius:10px;">
+      <div style="font-size:15px;color:rgba(242,237,227,0.7);line-height:1.8;margin-bottom:10px;">
+        想一起玩的话<br>加我微信拉你进群
+      </div>
+      <div style="font-size:28px;font-weight:900;color:#C44536;letter-spacing:3px;margin-bottom:8px;">YOUR_WECHAT_ID</div>
+      <div style="font-size:12px;color:rgba(242,237,227,0.35);">备注 <strong style="color:rgba(242,237,227,0.6);">观鸟</strong></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div style="text-align:center;font-size:11px;color:rgba(242,237,227,0.2);line-height:1.8;">
+      看着收集的鸟儿们在森林里飞来飞去<br>
+      实在是太治愈了 🐦✨
+    </div>
+  </div>
+  <div class="page-num light">10/10</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+const SCALE = 2;
+
+async function renderSlide(slide) {
+  return html2canvas(slide, {
+    scale: SCALE,
+    useCORS: true,
+    backgroundColor: null,
+    width: 540,
+    height: 720,
+    logging: false,
+  });
+}
+
+function canvasToBlob(canvas) {
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+}
+
+async function downloadOne() {
+  const slides = document.querySelectorAll('.slide');
+  const viewportCenter = window.innerHeight / 2;
+  let closest = 0, minDist = Infinity;
+  slides.forEach((s, i) => {
+    const rect = s.getBoundingClientRect();
+    const center = rect.top + rect.height / 2;
+    const dist = Math.abs(center - viewportCenter);
+    if (dist < minDist) { minDist = dist; closest = i; }
+  });
+
+  const slide = slides[closest];
+  if (!slide) return;
+
+  const progress = document.getElementById('progress');
+  progress.textContent = '渲染中...';
+
+  try {
+    const canvas = await renderSlide(slide);
+    const blob = await canvasToBlob(canvas);
+    const num = String(closest + 1).padStart(2, '0');
+    saveAs(blob, `小红书-观鸟图鉴-${num}.png`);
+    progress.textContent = `第 ${closest + 1} 张已下载`;
+  } catch (e) {
+    progress.textContent = '下载失败';
+  }
+}
+
+async function downloadAll() {
+  const slides = document.querySelectorAll('.slide');
+  const progress = document.getElementById('progress');
+  const zip = new JSZip();
+  const total = slides.length;
+
+  for (let i = 0; i < total; i++) {
+    progress.textContent = `渲染第 ${i + 1}/${total} 张...`;
+    try {
+      const canvas = await renderSlide(slides[i]);
+      const blob = await canvasToBlob(canvas);
+      const num = String(i + 1).padStart(2, '0');
+      zip.file(`小红书-观鸟图鉴-${num}.png`, blob);
+    } catch (e) {
+      progress.textContent = `第 ${i + 1} 张渲染失败，跳过`;
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  progress.textContent = '打包 ZIP 中...';
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  saveAs(zipBlob, '小红书-观鸟图鉴-全部.zip');
+  progress.textContent = `${total} 张图片已打包下载`;
+}
+</script>
+
+</body>
+</html>
