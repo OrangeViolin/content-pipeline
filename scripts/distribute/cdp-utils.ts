@@ -373,7 +373,7 @@ export interface Manifest {
       copy: { title: string; description: string; show_notes: string };
     };
     wechat?: {
-      markdown: string;
+      markdown?: string;
       images?: string[];
       html?: string;
       title?: string;

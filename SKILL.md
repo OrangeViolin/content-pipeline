@@ -49,10 +49,17 @@ description: 内容生产和分发统一管线。素材收集→出稿→排版�
 | "做成小红书" + 微信链接 | 同上 |
 | "转即刻" + 微信链接 | 生成即刻文案 |
 | "转播客" + 微信链接 | 生成播客脚本 + AI 语音 |
+| `/podcast` + 链接/文章/书名 | 小宇宙播客全流程（15分钟百家讲坛风格） |
+| "做播客" + 链接/文章/书名 | 同上 |
+| "录播客" + 链接/文章/书名 | 同上 |
+| "讲书播客" + 书名/链接 | 百家讲坛风格讲书播客 |
+| `/shiji` + 文章/素材 | 史记罗生门栏目播客（AI侦探×史源追踪） |
+| "史记罗生门" + 文章/素材 | 同上 |
+| "做史记播客" + 文章/素材 | 同上 |
 | "做视频" + 微信链接 | 触发品牌视频管线 |
-| "做视频画布" + 任意素材 | 生成可录制的 Prezi 风格视频画布（微信链接/md/pdf/html/文本均可） |
-| "录屏画布" + 任意素材 | 同上 |
-| "手账视频" + 任意素材 | 同上 |
+| "做视频画布" + 网址列表 | 生成录屏画布（全屏网页演示 + 露脸 + 提词器） |
+| "录屏画布" + 网址列表 | 同上 |
+| "录屏" + 网址列表 | 同上 |
 | "多平台分发" + 微信链接 | 一次生成所有平台内容 |
 | "转小红书并发布" + 微信链接 | 生成 + 自动触发分发 |
 
@@ -191,8 +198,20 @@ cc 在对话中**主动识别有料瞬间**并自动记录，无需手动触发�
 
 | 内容类型 | 判断信号 | 使用框架 | 参考文件 |
 |---------|---------|---------|---------|
+| **说明书类** | 开源项目介绍、工具/产品说明、知识库/数据集发布、平台使用指南、"介绍一下 xxx" | 六段式说明书框架 | `references/manual-framework.md` |
 | **教程类** | 教人安装/使用/配置工具、Skill 介绍、技术实战、"怎么做 xxx" | 六段式教程框架 | `references/tutorial-framework.md` |
 | **深度长文** | 行业分析、人物故事、趋势判断、观点输出、"为什么 xxx" | 四幕式深度框架 | `references/writing-style.md` |
+
+**说明书类文章框架（3000-6000 字）：**
+```
+项目定义+核心数据（标题即摘要，开头即高潮）
+→ 一、核心成果（数据总览表）
+→ 二、功能特性（逐一展开，每个一小节+配图）
+→ 三、怎么用（按用户分层：零门槛→进阶→开发者→创作者）
+→ 四、价值/洞见（超出工具本身的意义）
+→ 五、扩展路线（可选）
+→ 写在最后（核心价值+愿景+链接）
+```
 
 **教程类文章框架（2000-4000 字）：**
 ```
@@ -213,21 +232,33 @@ cc 在对话中**主动识别有料瞬间**并自动记录，无需手动触发�
 → 04 升华/收束
 ```
 
-4. **写文章** — 按对应框架写文章
-4. **保存** — 保存 Markdown 文件
-5. **排版** — 调用排版工具生成 HTML 预览（01fish 主题）
-6. **头图 + 配图** — 生成可下载的 HTML 文件（→ 读 `references/cover-template.md`）
+4. **读风格指南** — 写文章前**必须先读** `references/writing-style.md`。这是从鱼头头 9 篇已发布文章中逆向工程出的真实写作模式，不是理论指南。核心要点：极短段落（1-3句）、单句成段做"钉子"、口语化动词、"不是A是B"金句句式、数字制造反差、表格优先于段落。
+5. **写文章** — 按对应框架 + 风格指南写文章。写完后用风格指南末尾的"按类型写作清单"自检一遍。
+6. **保存** — 保存 Markdown 文件
+7. **排版** — 调用排版工具生成 HTML 预览（01fish 主题）
+8. **头图 + 配图** — 生成可下载的 HTML 文件（→ 读 `references/cover-template.md`）
    - **竖版封面（可选）**：用户说"做竖版封面"时，从已生成的公众号头图 HTML 转换 → 读 `references/cover-vertical-spec.md`
-7. **朋友圈文案** — 生成朋友圈推广文案（→ 读 `references/platform-copy.md`）
-8. **manifest** — 生成 manifest.json，供 `/distribute` 使用。wechat 部分必须包含：
-   - `wechat.markdown`：文章 Markdown 路径
-   - `wechat.html`：排版后的 `_preview.html` 路径
-   - `wechat.cover_image`：封面 PNG 路径（用户需先从浏览器下载）
-   - `wechat.title`：文章标题
+   - **配图与排版 HTML 的关联**：生成配图后，用 Playwright 截图为 PNG，然后在排版 `_preview.html` 的对应位置插入占位符注释 `<!-- IMAGE:配图-1.png -->`，分发脚本会自动将配图上传到微信 CDN 并替换占位符为 `<img>` 标签。
+9. **朋友圈文案** — 生成朋友圈推广文案（→ 读 `references/platform-copy.md`）
+10. **manifest** — 生成 manifest.json，供 `/distribute` 使用。
+
+   **WeChat 发布流程（全自动）**：
+   1. 写文章（Markdown）
+   2. 排版（`md2wechat_formatter.py` 生成 `_preview.html`）
+   3. 生成配图 HTML → Playwright 截图为 PNG
+   4. 在 `_preview.html` 中插入图片占位符 `<!-- IMAGE:文件名.png -->`
+   5. 生成 manifest.json（包含所有路径）
+   6. 执行 `/distribute --platforms wechat`（API 自动：上传封面→上传配图→替换占位符→推送草稿箱）
+
+   wechat 部分字段说明：
+   - `wechat.html`（**必填**）：排版后的 `_preview.html` 路径（配图位置用 `<!-- IMAGE:文件名.png -->` 标记）
+   - `wechat.cover_image`（**必填**）：封面 PNG 路径
+   - `wechat.title`（**必填**）：文章标题
    - `wechat.author`：作者名（默认 `01fish`）
    - `wechat.digest`：文章摘要（120 字内）
-   - `wechat.images`：配图 PNG 路径列表（如有）
-9. **询问** — 是否清空当前素材
+   - `wechat.images`：配图 PNG 路径列表（按文章中出现的顺序排列，分发脚本会上传并插入到对应占位符位置）
+   - `wechat.markdown`（可选）：文章 Markdown 路径（仅作记录，不再用于转换）
+11. **询问** — 是否清空当前素材
 
 ### 排版命令
 
@@ -333,13 +364,30 @@ python3 "${SKILL_DIR}/scripts/fetch_wechat_article.py" "<URL>" --json
 
 ### 第 7 步：生成播客脚本
 
-→ 读 `references/platform-copy.md` 的播客部分。
+**根据触发词选择播客模式：**
+
+| 触发词 | 模式 | 时长 | 风格 |
+|--------|------|------|------|
+| "转播客" | 标准模式 | 5-8 分钟 | AI搭档聊天风 → 读 `references/platform-copy.md` 播客部分 |
+| `/podcast` / "做播客" / "录播客" / "讲书播客" | **百家讲坛模式** | **15 分钟** | **讲书人风格** → 读 `references/xiaoyuzhou-podcast.md` |
+
+**百家讲坛模式**是小宇宙播客的主力模式，适合把文章/书籍改编为有故事感、有节奏感的深度音频内容。
 
 ### 第 8 步：AI 语音生成
 
 使用 Fish Audio TTS 将播客脚本转为 MP3（→ 读 `references/tts-config.md`）。
 
-文件命名：`[播客标题].mp3` + `[播客标题]-播客脚本.txt`
+**百家讲坛模式的 TTS 调整**：15 分钟脚本约 4000 字，分段大小从 800 字降为 600 字（更短分段带来更好的语音节奏），预计 6-7 段，生成时间 5-8 分钟。
+
+文件命名：`[播客标题].mp3` + `[播客标题]-播客脚本.md`
+
+### 第 8.2 步：生成播客封面（百家讲坛模式）
+
+→ 读 `references/podcast-cover-template.md`
+
+生成 3000×3000 正方形封面 HTML，01fish 墨绿体系，浏览器下载 PNG 后上传小宇宙。
+
+文件命名：`[播客标题]-播客封面.html`
 
 ### 第 8.5 步：输出 manifest.json
 
@@ -354,7 +402,7 @@ python3 "${SKILL_DIR}/scripts/fetch_wechat_article.py" "<URL>" --json
   "outputs": {
     "xiaohongshu": { "html": "...", "copy": { "title": "...", "body": "...", "tags": [...] } },
     "jike": { "copy": { "body": "...", "circles": [...] } },
-    "xiaoyuzhou": { "audio": "...", "script": "...", "copy": { "title": "...", "description": "...", "show_notes": "..." } },
+    "xiaoyuzhou": { "audio": "...", "script": "...", "cover": "...", "copy": { "title": "EP01丨...", "description": "...", "show_notes": "..." } },
     "video_canvas": { "html": "...", "teleprompter_md": "...", "cover_html": "..." }
   }
 }
@@ -380,22 +428,17 @@ npx remotion render src/index.ts Outro --output /tmp/brand-outro.mp4
 
 **C. ffmpeg 拼接指令** — 生成拼接命令供用户手动执行
 
-### 第 9B 步：视频画布生成（可选）
+### 第 9B 步：录屏画布生成（可选）
 
-仅当用户说"做视频画布"、"录屏画布"、"手账视频"时执行。**接受任意素材输入**：微信链接、Markdown 文件、PDF、HTML 文件、纯文本、用户口述内容均可。
+仅当用户说"做视频画布"、"录屏画布"、"录屏"时执行。用户提供**要演示的网址列表 + 简短主题**。
 
-1. **获取内容** — 根据输入类型自动处理：
-   - 微信链接：调用 `scripts/fetch_wechat_article.py` 抓取
-   - 文件路径（md/pdf/html/txt）：直接读取
-   - 用户粘贴的文本：直接使用
-2. **分析结构** — 提取标题、核心数据、痛点、步骤、原理、对比、金句、亮点
-3. **拆分为 9 张卡片** — 读取 `references/video-canvas-template.md` 获取完整 CSS+JS 模板和卡片规范
-4. **生成 9 段提词器脚本** — 口语化，每段 80-150 字，含 `[提示]` cue 标记
-5. **输出提词器脚本 md** — `[简短主题]-提词器脚本.md`，用户可直接编辑
-6. **组装 HTML** — CSS 框架 + HTML 骨架 + 填充内容 + JS 框架（SCRIPTS 与 md 一致）
-7. **输出文件** — `[简短主题]-视频画布.html`，保存到文章同目录或 `/tmp/`
-8. **生成封面图** — `[简短主题]-封面.html`，手账风格 + 人像圆框，浏览器下载 PNG
-9. **提示用户** — 先检查提词器脚本 md，再在浏览器中打开 HTML 录制。16:9 固定比例，各平台直接上传
+1. **获取输入** — 用户提供：要演示的网址列表 + 简短主题
+2. **生成提词器脚本** — 每个网址对应一段口播（80-150 字），含 `[提示]` cue 标记
+3. **输出提词器脚本 md** — `[主题]-提词器脚本.md`，用户可直接编辑
+4. **组装 HTML** — 读取 `references/video-canvas-template.md` 获取完整 CSS+JS 模板，网址预填 `WEB_URLS` + 提词器脚本填入 `SCRIPTS`
+5. **输出文件** — `[主题]-视频画布.html`，保存到用户指定目录或 `/tmp/`
+6. **生成封面图** — `[主题]-封面.html`，暗底 + 人像圆框，浏览器下载 PNG
+7. **提示用户** — 先检查提词器脚本 md，再在浏览器中打开 HTML 录制。16:9 固定比例，各平台直接上传
 
 ### 第 10 步：用户微调
 
@@ -407,13 +450,20 @@ npx remotion render src/index.ts Outro --output /tmp/brand-outro.mp4
 1. 小红书图片 HTML（含一键下载工具栏）
 2. 小红书发布文案（标题 + 正文 + 标签）
 3. 即刻发布文案（正文 + 圈子标签）
-4. 小宇宙播客（录制脚本 + AI 语音 MP3）
+4. 小宇宙播客（录制脚本 + AI 语音 MP3 + 节目封面）
 5. manifest.json（供 `/distribute` 一键发布）
 
-**第 9B 步可选追加（说"视频画布"时）：**
-6. 视频画布 HTML（含录制 + 提词器 + 美颜，16:9 固定）
-7. 提词器脚本 md（可编辑，修改后说"更新提词器"同步到 HTML）
-8. 封面图 HTML（手账风格 + 人像圆框，浏览器下载 PNG）
+**单独触发 `/podcast` 时，产出三样：**
+1. 播客脚本 md（15 分钟百家讲坛风格，3800-4200 字）
+2. AI 语音 MP3（Fish Audio TTS）
+3. 节目封面 HTML（3000×3000，浏览器下载 PNG）
+4. 小宇宙发布文案（标题 + 简介 + 完整文稿）
+5. manifest.json
+
+**第 9B 步可选追加（说"视频画布"/"录屏"时）：**
+6. 录屏画布 HTML（全屏网页演示 + 摄像头露脸 + 录制 + 提词器 + 美颜，16:9 固定）
+7. 提词器脚本 md（按网站分段，可编辑，修改后说"更新提词器"同步到 HTML）
+8. 封面图 HTML（暗底 + 人像圆框，浏览器下载 PNG）
 
 ---
 
@@ -458,7 +508,26 @@ npx -y bun "${SKILL_DIR}/scripts/distribute/distribute.ts" --manifest /path/to/m
 | L2 | 辅助发布 | 登录态失效/选择器失效/`--preview` |
 | L3 | 手动模式 | CDP 连接失败 |
 
-公众号优先 L0（API），凭证缺失或失败时自动降级 L1（CDP）。
+公众号优先 L0（API），凭证缺失或失败时自动降级 L3（手动）。
+
+### 公众号 API 模式说明
+
+**凭证来源**（按优先级）：
+1. 环境变量 `WECHAT_APPID` + `WECHAT_APPSECRET`
+2. 配置文件 `~/.config/wechat-api/config.json`
+
+**Token 缓存**：
+- 缓存位置：`~/.config/wechat-api/token-cache.json`
+- 有效期 2 小时，提前 5 分钟刷新
+- 无需手动管理，脚本自动处理
+
+**执行流程**：
+1. 获取 access_token（优先读缓存）
+2. 从 `_preview.html` 提取文章内容（`extractArticleContent`）
+3. 修复 WeChat 不兼容的 HTML 结构（`fixHtmlForWechat`）
+4. 扫描并上传本地图片到微信 CDN（`uploadLocalImagesInHtml`）
+5. 上传封面图获取 `thumb_media_id`
+6. 调用 `draft/add` 创建草稿
 
 ---
 
@@ -561,7 +630,8 @@ font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 |--------|---------|
 | `scripts/fetch_wechat_article.py` | 微信文章抓取（Python，模拟微信 UA） |
 | `scripts/distribute/distribute.ts` | 分发主编排器 |
-| `scripts/distribute/cdp-utils.ts` | 共享 CDP 工具 |
+| `scripts/distribute/cdp-utils.ts` | 共享 CDP 工具 + Manifest 类型定义 |
+| `scripts/distribute/wechat-api.ts` | 公众号 API 客户端（token 管理、图片上传、草稿创建） |
 | `scripts/distribute/platforms/*.ts` | 各平台发布模块 |
 
 ---
@@ -572,6 +642,7 @@ cc 按需读取，不要一次性加载所有 reference。
 
 | 场景 | 读取文件 |
 |------|---------|
+| 出稿写说明书文章 | `references/manual-framework.md` — 六段式说明书框架（定义+成果→特性→用法→价值→路线→收束，3000-6000 字） |
 | 出稿写深度长文 | `references/writing-style.md` — 人设 + 写作规范 + 格式（四幕式，8000-12000 字） |
 | 出稿写教程文章 | `references/tutorial-framework.md` — 六段式教程框架（先看结果→概念→操作→实战→拿走即用，2000-4000 字） |
 | 生成头图/配图 | `references/cover-template.md` — 01fish 风格排版规范（头图 + 配图 + 视觉组件） |
@@ -579,8 +650,11 @@ cc 按需读取，不要一次性加载所有 reference。
 | 生成小红书轮播图 | `references/xiaohongshu-format.md` — HTML 模板 + 视觉组件库 |
 | 生成各平台文案 | `references/platform-copy.md` — 小红书/即刻/播客/朋友圈文案规范 |
 | 生成播客音频 | `references/tts-config.md` — Fish Audio 配置 + 生成脚本 |
+| 小宇宙播客（百家讲坛） | `references/xiaoyuzhou-podcast.md` — 15分钟讲书人风格脚本规范 + 改编流程 + 发布配置 |
+| 播客节目封面 | `references/podcast-cover-template.md` — 3000×3000 正方形封面 HTML 模板 |
+| 史记罗生门栏目 | `references/shiji-luoshengmen.md` — 栏目品牌设定 + AI侦探风格 + 脚本结构 |
 | 分发到各平台 | `references/distribute-platforms.md` — 平台配置 + manifest 格式 + 降级策略 |
-| 生成视频画布 | `references/video-canvas-template.md` — 手账拼贴视频画布模板（CSS+JS+卡片规范） |
+| 生成录屏画布 | `references/video-canvas-template.md` — 录屏画布模板（全屏网页演示+露脸+提词器+录制） |
 
 ---
 

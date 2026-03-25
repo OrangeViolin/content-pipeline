@@ -1,24 +1,16 @@
-# 视频画布模板参考（手账拼贴风格）
+# 视频画布模板参考（录屏 + 露脸 + 提词器）
 
-> cc 生成视频画布 HTML 时读取此文件。模板包含完整的 CSS、HTML 骨架和 JS 框架。
-> cc 根据文章内容填充 9 张卡片内容 + 9 段提词器脚本，其余部分原样复用。
+> cc 生成视频画布 HTML 时读取此文件。模板是一个纯粹的网页演示录制工具：
+> 全屏 iframe 演示网页 + 角落摄像头露脸 + 提词器看脚本 + 一键录制。
+> cc 根据用户提供的网址列表预填 URL，并为每个网站生成一段提词器脚本。
 
 ---
 
-## 输入素材类型
+## 输入
 
-cc 接受任意素材输入，自动识别并提取内容：
-
-| 输入类型 | 处理方式 |
-|---------|---------|
-| 微信链接 | 调用 `scripts/fetch_wechat_article.py` 抓取 |
-| Markdown 文件 | 直接读取 |
-| PDF 文件 | 读取并提取文本 |
-| HTML 文件 | 读取并提取正文 |
-| 纯文本 | 直接使用 |
-| 用户口述/粘贴内容 | 直接使用 |
-
-提取内容后，分析结构 → 拆分为 9 张卡片 + 9 段提词器脚本。
+用户提供：
+1. **要演示的网址列表**（1-N 个 URL）
+2. **简短主题**（用于文件命名和提词器脚本主题）
 
 ---
 
@@ -34,7 +26,7 @@ cc 接受任意素材输入，自动识别并提取内容：
    doc.body.innerHTML = '<scr' + 'ipt>...</scr' + 'ipt>';
    ```
 
-2. **let 变量 TDZ**：所有 `let` 变量声明必须在 `goOverview()` 调用之前，否则触发 Temporal Dead Zone 错误。
+2. **let 变量 TDZ**：所有 `let` 变量声明必须在函数调用之前，否则触发 Temporal Dead Zone 错误。
 
 3. **瘦脸 scale**：使用 `scale(-(1.2*slimFactor), 1.2)` 实现镜像+瘦脸。不要用 `scale(-slimFactor, 1)`，会导致摄像头画面不填满圆框。
 
@@ -52,7 +44,7 @@ cc 接受任意素材输入，自动识别并提取内容：
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>01fish #{{NUMBER}} - {{TITLE}}</title>
+    <title>{{TITLE}} - 录屏画布</title>
     <style>
         /* === 完整 CSS 见下方 === */
     </style>
@@ -68,159 +60,12 @@ cc 接受任意素材输入，自动识别并提取内容：
 
 ---
 
-## CSS 框架（~320行）
+## CSS 框架
 
 ```css
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap');
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 100%; height: 100%; overflow: hidden; background: #E8E3D9; cursor: grab; }
-body.dragging { cursor: grabbing; }
-body.dragging .world { transition: none !important; }
-
-/* 方格纸底 */
-.world {
-    position: absolute; width: 3600px; height: 2000px;
-    background: #F2EDE3;
-    background-image:
-        linear-gradient(rgba(26,51,40,0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(26,51,40,0.05) 1px, transparent 1px);
-    background-size: 24px 24px;
-    transform-origin: 0 0;
-    transition: transform 0.7s cubic-bezier(0.25, 0.1, 0.25, 1);
-    will-change: transform;
-}
-
-/* 卡片通用 */
-.card {
-    position: absolute; cursor: pointer;
-    transition: box-shadow 0.3s, filter 0.3s;
-}
-.card:hover { filter: brightness(1.02); box-shadow: 8px 8px 0 rgba(26,51,40,0.15) !important; }
-.card.active { z-index: 50 !important; }
-
-/* 胶带 */
-.tape { position: absolute; height: 26px; z-index: 10; pointer-events: none; }
-.tape-tl { top: -13px; left: 28px; transform: rotate(-4deg); }
-.tape-tr { top: -13px; right: 28px; transform: rotate(3deg); }
-.tape-bl { bottom: -13px; left: 36px; transform: rotate(3deg); }
-.tape-br { bottom: -13px; right: 28px; transform: rotate(-2deg); }
-.tape-w80 { width: 80px; } .tape-w100 { width: 100px; }
-.tape-red { background: rgba(196,69,54,0.13); }
-.tape-green { background: rgba(26,51,40,0.09); }
-
-/* 便签 */
-.sticky {
-    position: absolute; padding: 10px 14px; font-family: 'Caveat', cursive; font-size: 16px;
-    line-height: 1.4; z-index: 10; box-shadow: 2px 2px 5px rgba(0,0,0,0.07); pointer-events: none;
-}
-.sticky-y { background: #FFF8DC; color: #1A3328; }
-.sticky-p { background: #FFE4E1; color: #C44536; }
-.sticky-g { background: #E8EDEA; color: #1A3328; }
-
-/* 连线 */
-.connector { position: absolute; pointer-events: none; z-index: 5; }
-.connector path { fill: none; stroke: #1A3328; stroke-width: 2; stroke-dasharray: 8 6; opacity: 0.2; }
-
-/* === c1: 标题卡（墨绿底） === */
-.c1 { left:80px;top:200px;width:500px;height:460px;background:#1A3328;padding:44px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;transform:rotate(-1.2deg);box-shadow:6px 6px 0 rgba(26,51,40,0.15);z-index:10; }
-.c1 .logo { font-family:'Caveat',cursive;font-size:22px;color:#7A8C80;margin-bottom:20px; }
-.c1 h1 { font-size:44px;color:#F2EDE3;line-height:1.35;font-weight:900;margin-bottom:16px; }
-.c1 h1 em { font-style:normal;display:inline-block;background:#C44536;padding:2px 10px;transform:rotate(-1deg); }
-.c1 .sub { font-family:'Caveat',cursive;font-size:22px;color:#7A8C80; }
-
-/* === c2: 数据卡（白底） === */
-.c2 { left:680px;top:80px;width:380px;height:420px;background:white;padding:40px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;transform:rotate(1deg);border:2px solid #1A3328;box-shadow:5px 5px 0 rgba(26,51,40,0.1);z-index:10; }
-.c2 .num { font-family:'Caveat',cursive;font-size:120px;font-weight:700;color:#C44536;line-height:1; }
-.c2 .lbl { font-size:26px;color:#1A3328;font-weight:800;margin-bottom:12px; }
-.c2 .det { font-size:15px;color:#7A8C80;line-height:2; }
-.c2 .stamp { margin-top:16px;padding:6px 18px;border:2px solid #C44536;border-radius:3px;font-family:'Caveat',cursive;font-size:20px;color:#C44536;transform:rotate(-4deg); }
-
-/* === c3: 痛点/问题卡（白底+条纹） === */
-.c3 { left:680px;top:540px;width:440px;height:400px;background:white;padding:36px;display:flex;flex-direction:column;justify-content:center;transform:rotate(-0.5deg);border:2px solid #1A3328;box-shadow:5px 5px 0 rgba(26,51,40,0.1);z-index:10; }
-.c3 h2 { font-size:26px;color:#1A3328;font-weight:900;margin-bottom:20px; }
-.c3 .strip { background:#FFE4E1;padding:12px 16px;margin-bottom:8px;border-left:4px solid #C44536;font-size:15px;color:#333;line-height:1.5; }
-.c3 .strip:nth-child(odd) { transform:rotate(0.3deg); }
-.c3 .strip:nth-child(even) { transform:rotate(-0.3deg); }
-.c3 .punchline { margin-top:16px;padding:16px;background:#1A3328;color:#F2EDE3;border-radius:3px;font-size:18px;font-weight:800;line-height:1.5;text-align:center;transform:rotate(0.5deg); }
-.c3 .punchline span { color:#C44536; }
-
-/* === c4: 步骤卡（墨绿底+ticket） === */
-.c4 { left:1200px;top:140px;width:460px;height:460px;background:#1A3328;padding:40px;display:flex;flex-direction:column;justify-content:center;transform:rotate(0.7deg);box-shadow:5px 5px 0 rgba(26,51,40,0.2);z-index:10; }
-.c4 h2 { font-family:'Caveat',cursive;font-size:34px;color:#F2EDE3;font-weight:700;margin-bottom:24px; }
-.c4 .ticket { background:white;padding:16px 20px;margin-bottom:12px;border-left:5px solid #C44536;display:flex;align-items:flex-start;gap:14px; }
-.c4 .ticket:nth-child(odd) { transform:rotate(-0.3deg); }
-.c4 .ticket:nth-child(even) { transform:rotate(0.4deg); }
-.c4 .tnum { font-family:'Caveat',cursive;font-size:30px;font-weight:700;color:#C44536;min-width:28px;line-height:1; }
-.c4 .tbody h3 { font-size:17px;color:#1A3328;font-weight:700;margin-bottom:2px; }
-.c4 .tbody p { font-size:12px;color:#7A8C80;line-height:1.4; }
-.c4 .foot { text-align:center;color:#7A8C80;font-size:14px;margin-top:12px; }
-
-/* === c5: 架构卡（白底+流程框） === */
-.c5 { left:1220px;top:660px;width:480px;height:400px;background:white;padding:36px;display:flex;flex-direction:column;justify-content:center;transform:rotate(-0.6deg);border:2px solid #1A3328;box-shadow:5px 5px 0 rgba(26,51,40,0.1);z-index:10; }
-.c5 h2 { font-size:26px;color:#1A3328;font-weight:900;margin-bottom:20px; }
-.c5 .abox { background:#F2EDE3;border:1.5px solid #1A3328;padding:14px 18px;margin-bottom:6px;position:relative; }
-.c5 .abox h3 { font-size:16px;color:#1A3328;font-weight:800;margin-bottom:3px; }
-.c5 .abox p { font-size:12px;color:#7A8C80;line-height:1.5; }
-.c5 .abox .mt { position:absolute;top:-7px;right:14px;width:56px;height:16px;transform:rotate(2deg); }
-.c5 .abox .mt.red { background:rgba(196,69,54,0.15); }
-.c5 .abox .mt.grn { background:rgba(26,51,40,0.1); }
-.c5 .aconn { text-align:center;font-family:'Caveat',cursive;font-size:18px;color:#7A8C80;padding:1px 0; }
-
-/* === c6: 数据/对比卡（白底+小票） === */
-.c6 { left:1780px;top:100px;width:400px;height:440px;background:white;padding:36px;display:flex;flex-direction:column;justify-content:center;transform:rotate(0.5deg);border:2px solid #1A3328;box-shadow:5px 5px 0 rgba(26,51,40,0.1);z-index:10; }
-.c6 h2 { font-size:26px;color:#1A3328;font-weight:900;margin-bottom:20px; }
-.c6 .receipt { background:#F2EDE3;padding:18px;border:1px dashed rgba(26,51,40,0.3);font-family:monospace; }
-.c6 .rrow { display:flex;justify-content:space-between;padding:7px 0;font-size:14px;color:#333;border-bottom:1px dotted rgba(26,51,40,0.15); }
-.c6 .rrow .v { font-weight:700;color:#1A3328; } .c6 .rrow .v.r { color:#C44536; }
-.c6 .rtotal { display:flex;justify-content:space-between;padding:10px 0 0;font-size:16px;font-weight:800;color:#C44536; }
-.c6 .fnote { margin-top:14px;font-family:'Caveat',cursive;font-size:17px;color:#7A8C80;text-align:center;transform:rotate(-1deg); }
-
-/* === c7: 金句卡（墨绿底+大引号） === */
-.c7 { left:1800px;top:600px;width:440px;height:400px;background:#1A3328;padding:48px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;transform:rotate(-0.8deg);box-shadow:5px 5px 0 rgba(26,51,40,0.2);z-index:10; }
-.c7 .qm { font-family:'Caveat',cursive;font-size:72px;color:#C44536;line-height:0.5;margin-bottom:20px; }
-.c7 .qt { font-size:30px;color:#F2EDE3;font-weight:900;line-height:1.6;margin-bottom:20px; }
-.c7 .qt em { font-style:normal;display:inline-block;background:#C44536;padding:2px 8px; }
-.c7 .qs { font-family:'Caveat',cursive;font-size:19px;color:#7A8C80;line-height:1.8; }
-
-/* === c8: 闭环/特色卡（白底+标签流） === */
-.c8 { left:2340px;top:180px;width:500px;height:400px;background:white;padding:36px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;transform:rotate(0.4deg);border:2px solid #1A3328;box-shadow:5px 5px 0 rgba(26,51,40,0.1);z-index:10; }
-.c8 h2 { font-size:26px;color:#1A3328;font-weight:900;margin-bottom:24px; }
-.c8 .trk { display:flex;align-items:center;gap:6px;margin-bottom:10px; }
-.c8 .tag { padding:10px 16px;border-radius:5px;font-size:14px;font-weight:700;border:2px solid #1A3328;background:white;color:#1A3328; }
-.c8 .tag.hot { background:#C44536;border-color:#C44536;color:white;transform:rotate(-1deg); }
-.c8 .tag.em { font-size:17px;padding:8px 10px; }
-.c8 .arr { font-family:'Caveat',cursive;font-size:20px;color:#7A8C80; }
-.c8 .ins { margin-top:16px;font-size:15px;color:#7A8C80;line-height:1.8; }
-
-/* === c9: CTA卡（墨绿底+品牌） === */
-.c9 { left:2380px;top:640px;width:380px;height:380px;background:#1A3328;padding:44px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;transform:rotate(-0.6deg);box-shadow:5px 5px 0 rgba(26,51,40,0.2);z-index:10; }
-.c9 .fish { font-size:52px;margin-bottom:12px; }
-.c9 .brand { font-family:'Caveat',cursive;font-size:40px;color:#F2EDE3;font-weight:700;margin-bottom:6px; }
-.c9 .sl { font-size:15px;color:#7A8C80;line-height:1.7;margin-bottom:20px; }
-.c9 .cta { display:inline-block;background:#C44536;color:white;padding:12px 32px;font-size:16px;font-weight:700;border-radius:3px;transform:rotate(-1.5deg);box-shadow:3px 3px 0 rgba(0,0,0,0.12); }
-
-/* === 导航栏 === */
-.nav-bar {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 6px; z-index: 300;
-    background: rgba(26,51,40,0.9); padding: 8px 16px; border-radius: 28px;
-    backdrop-filter: blur(12px);
-}
-.nav-dot {
-    width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(242,237,227,0.3);
-    background: transparent; color: #F2EDE3; font-family: 'Caveat', cursive;
-    font-size: 15px; font-weight: 700; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; transition: all 0.3s;
-}
-.nav-dot:hover { border-color: #F2EDE3; background: rgba(242,237,227,0.1); }
-.nav-dot.active { background: #C44536; border-color: #C44536; }
-.nav-overview {
-    width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(242,237,227,0.3);
-    background: transparent; color: #F2EDE3; font-size: 14px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; transition: all 0.3s; margin-right: 8px;
-}
-.nav-overview:hover { border-color: #F2EDE3; }
-.nav-overview.active { background: rgba(242,237,227,0.15); border-color: #F2EDE3; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #E8E3D9; }
 
 /* === 摄像头（可拖拽） === */
 .webcam-wrap {
@@ -254,9 +99,9 @@ body.dragging .world { transition: none !important; }
 .tb-rec:hover { background: #a33828 !important; }
 .tb-rec .dot { width: 10px; height: 10px; border-radius: 50%; background: white; }
 
-/* === 录制状态（保留导航栏和页码） === */
-body.recording .hint,
-body.recording .cam-toggle { display: none !important; }
+/* === 录制状态 === */
+body.recording .toolbar { display: none !important; }
+body.recording .hint { display: none !important; }
 
 .rec-indicator {
     position: fixed; top: 20px; left: 20px; z-index: 400;
@@ -271,17 +116,9 @@ body.recording .rec-indicator { display: flex; }
 @keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 .rec-timer { font-family: 'Caveat', cursive; font-size: 18px; font-variant-numeric: tabular-nums; }
 
-/* 页码 / 提示 */
-.page-num { position: fixed; top: 20px; right: 28px; font-family: 'Caveat', cursive; font-size: 22px; color: #7A8C80; z-index: 300; }
+/* 提示 */
 .hint { position: fixed; top: 20px; left: 28px; font-size: 13px; color: #7A8C80; z-index: 300; transition: opacity 0.5s; }
 .hint.hide { opacity: 0; pointer-events: none; }
-.cam-toggle {
-    position: fixed; bottom: 80px; right: 200px;
-    background: rgba(26,51,40,0.85); color: #F2EDE3; border: none;
-    padding: 8px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; z-index: 200;
-}
-.cam-toggle:hover { background: #1A3328; }
-.cam-toggle.on { background: #C44536; }
 
 /* === 设置面板 === */
 .modal-overlay {
@@ -302,18 +139,17 @@ body.recording .rec-indicator { display: flex; }
     font-size: 18px; display: flex; align-items: center; justify-content: center;
 }
 .modal .close-btn:hover { background: #e0e0e0; }
-.modal .section-label { font-size: 13px; color: #999; margin-bottom: 12px; }
+.modal .info-box {
+    background: #f8f8f8; border-radius: 10px; padding: 14px 16px;
+    margin-bottom: 20px; font-size: 13px; color: #666; line-height: 1.6;
+}
+.modal .info-box strong { color: #1A3328; }
 .modal .start-rec-btn {
     width: 100%; padding: 14px; border-radius: 12px; border: none;
     background: #C44536; color: white; font-size: 16px; font-weight: 700;
     cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .modal .start-rec-btn:hover { background: #a33828; }
-.modal .info-box {
-    background: #f8f8f8; border-radius: 10px; padding: 14px 16px;
-    margin-bottom: 20px; font-size: 13px; color: #666; line-height: 1.6;
-}
-.modal .info-box strong { color: #1A3328; }
 
 /* === 美颜面板 === */
 .beauty-panel {
@@ -331,7 +167,7 @@ body.recording .rec-indicator { display: flex; }
 .bp-row input[type=range] { flex: 1; accent-color: #1A3328; }
 body.recording .beauty-panel { display: none !important; }
 
-/* === 网站演示层 === */
+/* === 网站演示层（全屏） === */
 .web-layer {
     position: fixed; inset: 0; z-index: 100;
     display: none; flex-direction: column;
@@ -419,12 +255,14 @@ body.recording .web-bar { display: none; }
     text-align: center; color: #999; font-size: 13px; padding: 24px 0;
 }
 
-/* 导航栏网站分隔 + 网站导航点 */
-.nav-web-sep {
-    width: 1px; height: 20px; background: rgba(242,237,227,0.2);
-    margin: 6px 4px; display: none;
+/* === 导航栏 === */
+.nav-bar {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; z-index: 300;
+    background: rgba(26,51,40,0.9); padding: 8px 16px; border-radius: 28px;
+    backdrop-filter: blur(12px);
 }
-.nav-web-sep.show { display: block; }
+body.recording .nav-bar { display: none !important; }
 .nav-dot-web {
     width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(242,237,227,0.3);
     background: transparent; color: #F2EDE3; font-size: 14px; cursor: pointer;
@@ -432,6 +270,22 @@ body.recording .web-bar { display: none; }
 }
 .nav-dot-web:hover { border-color: #F2EDE3; background: rgba(242,237,227,0.1); }
 .nav-dot-web.active { background: #C44536; border-color: #C44536; }
+
+/* === 欢迎页（无网站时显示） === */
+.welcome {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #F2EDE3; text-align: center;
+}
+.welcome.hide { display: none; }
+.welcome h1 { font-size: 36px; color: #1A3328; font-weight: 900; margin-bottom: 12px; }
+.welcome p { font-size: 16px; color: #7A8C80; margin-bottom: 32px; }
+.welcome .start-btn {
+    padding: 14px 36px; border-radius: 12px; border: none;
+    background: #1A3328; color: #F2EDE3; font-size: 16px; font-weight: 700;
+    cursor: pointer;
+}
+.welcome .start-btn:hover { background: #2a4a3a; }
 
 /* === 实时字幕 === */
 .subtitle-bar {
@@ -456,12 +310,17 @@ body.recording .web-bar { display: none; }
 
 ```html
 <body>
-    <div class="page-num" id="pageNum">全景</div>
-    <div class="hint" id="hint">点击卡片放大 · ← → 翻页 · ESC 回全景</div>
+    <div class="hint" id="hint">🌐 导航点切换网站 · ← → 翻页 · 📋 提词器</div>
+
+    <!-- 欢迎页（无网站时显示） -->
+    <div class="welcome" id="welcome">
+        <h1>录屏画布</h1>
+        <p>添加要演示的网站，开始录制</p>
+        <button class="start-btn" id="welcomeStartBtn">选择网站</button>
+    </div>
 
     <!-- 摄像头 -->
     <div class="webcam-wrap off" id="webcam"><video id="camVideo" autoplay playsinline muted></video></div>
-    <button class="cam-toggle" id="camBtn">📷</button>
 
     <!-- 录制指示器 -->
     <div class="rec-indicator" id="recIndicator" title="点击停止录制">
@@ -475,11 +334,11 @@ body.recording .web-bar { display: none; }
         <span class="subtitle-text" id="subtitleText"></span>
     </div>
 
-    <!-- 网站演示层 -->
+    <!-- 网站演示层（全屏 iframe） -->
     <div class="web-layer" id="webLayer">
         <div class="web-bar">
             <span class="web-bar-url" id="webBarUrl">—</span>
-            <button class="web-bar-btn" id="webBarBack" title="返回画布">✕ 退出</button>
+            <button class="web-bar-btn" id="webBarManage" title="管理网站">管理网站</button>
         </div>
         <iframe class="web-iframe" id="webIframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allowfullscreen></iframe>
     </div>
@@ -505,7 +364,6 @@ body.recording .web-bar { display: none; }
         <button class="tb-btn" id="btnCamToggle" title="摄像头开关">📷</button>
         <button class="tb-btn" id="btnBeauty" title="美颜">✨</button>
         <button class="tb-btn" id="btnSubtitle" title="实时字幕">💬</button>
-        <button class="tb-btn" id="btnWebsite" title="网站演示">🌐</button>
         <button class="tb-btn tb-rec" id="btnRecord" title="开始录制">
             <div class="dot"></div>
             <span>录制</span>
@@ -521,7 +379,7 @@ body.recording .web-bar { display: none; }
         <div class="bp-row"><span class="bp-label">磨皮</span><input type="range" min="0" max="100" value="10" id="sliderSmooth"></div>
     </div>
 
-    <!-- 录制确认面板（16:9 固定） -->
+    <!-- 录制确认面板 -->
     <div class="modal-overlay" id="settingsModal">
         <div class="modal">
             <button class="close-btn" id="closeSettings">&times;</button>
@@ -538,200 +396,18 @@ body.recording .web-bar { display: none; }
         </div>
     </div>
 
-    <!-- 导航栏 -->
-    <div class="nav-bar">
-        <button class="nav-overview active" id="navOverview" title="全景">⊞</button>
-        <!-- cc 生成 9 个导航点 -->
-        <button class="nav-dot" data-idx="0">1</button>
-        <button class="nav-dot" data-idx="1">2</button>
-        <button class="nav-dot" data-idx="2">3</button>
-        <button class="nav-dot" data-idx="3">4</button>
-        <button class="nav-dot" data-idx="4">5</button>
-        <button class="nav-dot" data-idx="5">6</button>
-        <button class="nav-dot" data-idx="6">7</button>
-        <button class="nav-dot" data-idx="7">8</button>
-        <button class="nav-dot" data-idx="8">9</button>
-        <div class="nav-web-sep" id="navWebSep"></div>
-        <!-- 动态网站导航点由 JS 插入此处 -->
-    </div>
-
-    <!-- 画布 -->
-    <div class="world" id="world">
-        <!-- 连接线（固定，不用改） -->
-        <div class="connector" style="left:540px;top:400px;"><svg width="180" height="60"><path d="M0,30 C40,10 80,50 160,20"/></svg></div>
-        <div class="connector" style="left:820px;top:480px;"><svg width="60" height="100"><path d="M30,0 C10,30 50,70 30,100"/></svg></div>
-        <div class="connector" style="left:1050px;top:280px;"><svg width="180" height="60"><path d="M0,40 C50,10 100,50 170,20"/></svg></div>
-        <div class="connector" style="left:1370px;top:580px;"><svg width="60" height="120"><path d="M30,0 C50,40 10,80 30,110"/></svg></div>
-        <div class="connector" style="left:1640px;top:300px;"><svg width="180" height="60"><path d="M0,30 C50,5 100,55 160,25"/></svg></div>
-        <div class="connector" style="left:1860px;top:520px;"><svg width="60" height="120"><path d="M30,0 C10,40 50,80 30,110"/></svg></div>
-        <div class="connector" style="left:2200px;top:350px;"><svg width="180" height="60"><path d="M0,35 C50,5 100,55 160,20"/></svg></div>
-        <div class="connector" style="left:2540px;top:560px;"><svg width="60" height="120"><path d="M30,0 C50,40 10,80 30,110"/></svg></div>
-
-        <!-- ========== 9 张卡片（cc 根据文章内容填充） ========== -->
-        <!-- 下方是每张卡片的 HTML 结构示例 -->
-    </div>
+    <!-- 导航栏（只有网站导航点，由 JS 动态渲染） -->
+    <div class="nav-bar" id="navBar"></div>
 </body>
-```
-
----
-
-## 9 张卡片内容规范
-
-cc 根据文章内容选择每张卡片的内容。以下是每种卡片的 HTML 结构和适用场景。
-
-### c1 — 标题卡（墨绿底，大字，红色强调）
-
-**适用**：主标题 + hook，必须有冲击力
-
-```html
-<div class="card c1" data-idx="0">
-    <div class="tape tape-tl tape-w100 tape-green"></div>
-    <div class="tape tape-tr tape-w80 tape-red"></div>
-    <div class="logo">01fish · #{{NUMBER}}</div>
-    <h1>{{标题第一行}}<br>{{标题第二行}}<br><em>{{红色强调词}}</em></h1>
-    <div class="sub">{{副标题/数据摘要}}</div>
-    <div class="sticky sticky-y" style="bottom:-18px;right:-8px;transform:rotate(4deg);font-size:15px;">{{便签文字}} →</div>
-</div>
-```
-
-### c2 — 数据卡（白底，大数字，印章）
-
-**适用**：核心数据展示，用一个大数字震撼
-
-```html
-<div class="card c2" data-idx="1">
-    <div class="tape tape-tl tape-w80 tape-green"></div>
-    <div class="tape tape-br tape-w80 tape-red"></div>
-    <div class="num">{{核心数字}}</div>
-    <div class="lbl">{{单位/标签}}</div>
-    <div class="det">{{补充数据}}<br>{{补充数据}}</div>
-    <div class="stamp">{{印章文字}}</div>
-    <div class="sticky sticky-p" style="bottom:-14px;left:-8px;font-size:13px;transform:rotate(-3deg);">{{便签}}</div>
-</div>
-```
-
-### c3 — 痛点/问题卡（白底，条纹列表，金句底栏）
-
-**适用**：为什么？痛点列举 + 一句话总结
-
-```html
-<div class="card c3" data-idx="2">
-    <div class="tape tape-tl tape-w100 tape-red"></div>
-    <div class="tape tape-tr tape-w80 tape-green"></div>
-    <h2>{{问题标题}}</h2>
-    <div class="strip">✗ {{痛点1}}</div>
-    <div class="strip">✗ {{痛点2}}</div>
-    <div class="strip">✗ {{痛点3}}</div>
-    <div class="punchline">{{总结}}<br>是 <span>「{{核心洞察}}」</span> 的不够</div>
-    <div class="sticky sticky-g" style="bottom:-12px;right:-6px;font-size:13px;transform:rotate(3deg);">{{便签}}</div>
-</div>
-```
-
-### c4 — 步骤卡（墨绿底，ticket列表）
-
-**适用**：怎么做？操作流程，3-4步
-
-```html
-<div class="card c4" data-idx="3">
-    <div class="tape tape-tl tape-w80" style="background:rgba(242,237,227,0.08);"></div>
-    <h2>{{步骤标题}}</h2>
-    <div class="ticket"><span class="tnum">1</span><div class="tbody"><h3>{{步骤1标题}}</h3><p>{{步骤1描述}}</p></div></div>
-    <div class="ticket"><span class="tnum">2</span><div class="tbody"><h3>{{步骤2标题}}</h3><p>{{步骤2描述}}</p></div></div>
-    <div class="ticket"><span class="tnum">3</span><div class="tbody"><h3>{{步骤3标题}}</h3><p>{{步骤3描述}}</p></div></div>
-    <div class="foot" style="color:#7A8C80;">{{底部小字}}</div>
-    <div class="sticky sticky-y" style="bottom:-16px;right:-6px;font-size:13px;transform:rotate(3deg);">{{便签}}</div>
-</div>
-```
-
-### c5 — 架构卡（白底，流程框+胶带）
-
-**适用**：技术原理、架构拆解，2-3个流程框
-
-```html
-<div class="card c5" data-idx="4">
-    <div class="tape tape-tl tape-w100 tape-green"></div>
-    <div class="tape tape-br tape-w80 tape-red"></div>
-    <h2>{{架构标题}}</h2>
-    <div class="abox"><div class="mt red"></div><h3>① {{层级1}}</h3><p>{{描述}}</p></div>
-    <div class="aconn">↓</div>
-    <div class="abox"><div class="mt grn"></div><h3>② {{层级2}}</h3><p>{{描述}}</p></div>
-    <div class="aconn">↓</div>
-    <div class="abox"><div class="mt red"></div><h3>③ {{层级3}}</h3><p>{{描述}}</p></div>
-    <div class="sticky sticky-y" style="bottom:-14px;right:-6px;font-size:12px;transform:rotate(3deg);">{{便签}}</div>
-</div>
-```
-
-### c6 — 数据/对比卡（白底，小票 receipt）
-
-**适用**：算账、成本对比、数据拆解
-
-```html
-<div class="card c6" data-idx="5">
-    <div class="tape tape-tl tape-w80 tape-red"></div>
-    <h2>{{对比标题}} 🧾</h2>
-    <div class="receipt">
-        <div class="rrow"><span>{{项目1}}</span><span class="v r">{{数据1}}</span></div>
-        <div class="rrow"><span>{{项目2}}</span><span class="v">{{数据2}}</span></div>
-        <div class="rrow"><span>{{项目3}}</span><span class="v">{{数据3}}</span></div>
-        <div class="rtotal"><span>TOTAL</span><span>{{总结}}</span></div>
-    </div>
-    <div class="fnote">{{脚注}}</div>
-</div>
-```
-
-### c7 — 金句卡（墨绿底，大引号）
-
-**适用**：核心金句、洞察、类比
-
-```html
-<div class="card c7" data-idx="6">
-    <div class="tape tape-tl tape-w80" style="background:rgba(242,237,227,0.08);"></div>
-    <div class="tape tape-br tape-w80 tape-red"></div>
-    <div class="qm">"</div>
-    <div class="qt">{{金句上半}}<br><em>{{红色强调部分}}</em></div>
-    <div class="qs">{{金句解读/类比}}</div>
-</div>
-```
-
-### c8 — 闭环/特色卡（白底，标签流）
-
-**适用**：亮点展示、结果闭环、特色功能
-
-```html
-<div class="card c8" data-idx="7">
-    <div class="tape tape-tl tape-w100 tape-green"></div>
-    <div class="tape tape-tr tape-w80 tape-red"></div>
-    <h2>{{闭环标题}}</h2>
-    <div class="trk"><div class="tag em">{{emoji}}</div><span class="arr">→</span><div class="tag hot">{{核心动作}}</div><span class="arr">→</span><div class="tag">{{结果}}</div></div>
-    <div class="trk"><div class="tag em">{{emoji}}</div><span class="arr">→</span><div class="tag hot">{{核心动作}}</div><span class="arr">→</span><div class="tag">{{结果}}</div></div>
-    <div class="trk"><div class="tag em">{{emoji}}</div><span class="arr">→</span><div class="tag hot">{{核心动作}}</div><span class="arr">→</span><div class="tag">{{结果}}</div></div>
-    <div class="ins">{{一句话总结}}</div>
-</div>
-```
-
-### c9 — CTA卡（墨绿底，品牌）
-
-**适用**：固定结尾，关注 01fish。内容基本不变，只改预告。
-
-```html
-<div class="card c9" data-idx="8">
-    <div class="tape tape-tl tape-w80" style="background:rgba(242,237,227,0.08);"></div>
-    <div class="tape tape-br tape-w80 tape-red"></div>
-    <div class="fish">🐟</div>
-    <div class="brand">01fish</div>
-    <div class="sl">造东西的人<br>记录造东西的故事</div>
-    <div class="cta">关注 01fish</div>
-    <div class="sticky sticky-y" style="bottom:-14px;left:-8px;font-size:13px;transform:rotate(-4deg);">{{下期预告}}</div>
-</div>
 ```
 
 ---
 
 ## 提词器脚本规范
 
-cc 为每张卡片生成一段口播文案，存入 `SCRIPTS` 数组。格式要求：
+cc 为每个网站生成一段口播文案，存入 `SCRIPTS` 对象。格式要求：
 
-- 每段对应一张卡片（共 9 段）
+- 每段对应一个网站（key 为 URL）
 - 用 `\n` 换行
 - `[提示]` 标记会渲染为灰色小字（给主播看的 cue，不念出来）
 - 口语化，像跟朋友说话，不要播音腔
@@ -740,57 +416,46 @@ cc 为每张卡片生成一段口播文案，存入 `SCRIPTS` 数组。格式要
 **示例格式**：
 
 ```js
-const SCRIPTS = [
-    `{{第1张卡片的口播文案}}\n\n[看镜头，停一拍]`,
-    `{{第2张卡片的口播文案}}\n\n[让数字沉一下]`,
-    `{{第3张卡片的口播文案}}\n\n[语气坚定]`,
-    `{{第4张卡片的口播文案}}\n\n[轻松语气]`,
-    `{{第5张卡片的口播文案}}\n\n[节奏稍慢，讲清楚]`,
-    `{{第6张卡片的口播文案}}\n\n[强调重点数字]`,
-    `{{第7张卡片的口播文案}}\n\n[让金句落地]`,
-    `{{第8张卡片的口播文案}}\n\n[语气从平到燃]`,
-    `{{第9张卡片的口播文案}}\n\n[看镜头，干脆收]`
-];
+const SCRIPTS = {
+    'https://example.com': `这是第一个要演示的网站...\n\n[打开首页，展示主功能]`,
+    'https://app.example.com': `接下来看看实际的应用...\n\n[切换到仪表盘页面]`,
+};
 ```
 
 ---
 
-## JS 框架（~520行）
+## JS 框架
 
-**重要：以下 JS 原样使用，cc 只需替换 `SCRIPTS` 数组和 `title` 中的编号/标题。**
+**重要：以下 JS 原样使用，cc 只需替换 `WEB_URLS` 数组（预填网址）和 `SCRIPTS` 对象（提词器脚本）。**
 
 ```js
 // ========================
-// 提词器脚本（cc 替换此数组）
+// 预填网址（cc 替换此数组）
 // ========================
-const SCRIPTS = [
-    // cc 生成 9 段口播文案
+const WEB_URLS = [
+    // cc 预填用户提供的网址
 ];
 
 // ========================
-// 画布导航
+// 提词器脚本（cc 替换此对象）
 // ========================
-const world = document.getElementById('world');
-const cards = document.querySelectorAll('.card');
-const dots = document.querySelectorAll('.nav-dot');
-const navOverview = document.getElementById('navOverview');
-const pageNum = document.getElementById('pageNum');
-const hint = document.getElementById('hint');
+const SCRIPTS = {
+    // cc 生成每个网站对应的口播文案
+    // key: URL, value: 脚本文本
+};
 
-let currentIdx = -1;
-
-// 网站演示状态（提前声明避免 TDZ）
-let webMode = false;
-let currentWebIdx = -1;
-const WEB_URLS = [];
+// ========================
+// DOM 引用
+// ========================
 const webLayer = document.getElementById('webLayer');
 const webIframe = document.getElementById('webIframe');
 const webBarUrl = document.getElementById('webBarUrl');
 const webModal = document.getElementById('webModal');
 const webUrlInput = document.getElementById('webUrlInput');
 const webUrlList = document.getElementById('webUrlList');
-const navWebSep = document.getElementById('navWebSep');
-const navBar = document.querySelector('.nav-bar');
+const navBar = document.getElementById('navBar');
+const welcome = document.getElementById('welcome');
+const hint = document.getElementById('hint');
 
 // 提前声明（避免 TDZ 错误）
 let prompterWin = null;
@@ -798,123 +463,122 @@ let prompterDoc = null;
 let prompterScrolling = false;
 let prompterScrollTimer = null;
 
-const vw = window.innerWidth, vh = window.innerHeight;
-const worldW = 2900, worldH = 1100;
-const overviewScale = Math.min(vw / worldW, vh / worldH) * 0.85;
-const overviewX = (vw - worldW * overviewScale) / 2;
-const overviewY = (vh - worldH * overviewScale) / 2;
+let currentWebIdx = -1;
 
-let worldTx = overviewX, worldTy = overviewY, worldScale = overviewScale;
-
-function setWorldTransform(tx, ty, s, animate) {
-    worldTx = tx; worldTy = ty; worldScale = s;
-    if (animate) world.style.transition = 'transform 0.7s cubic-bezier(0.25, 0.1, 0.25, 1)';
-    world.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
-}
-
-function goOverview() {
-    if (webMode) exitWebMode(true);
-    currentIdx = -1;
-    setWorldTransform(overviewX, overviewY, overviewScale, true);
-    cards.forEach(c => c.classList.remove('active'));
-    dots.forEach(d => d.classList.remove('active'));
-    clearWebNavActive();
-    navOverview.classList.add('active');
-    pageNum.textContent = '全景';
+// ========================
+// 网站导航
+// ========================
+function goWebsite(idx) {
+    if (idx < 0 || idx >= WEB_URLS.length) return;
+    currentWebIdx = idx;
+    welcome.classList.add('hide');
+    webLayer.classList.add('show');
+    webIframe.src = WEB_URLS[idx];
+    webBarUrl.textContent = WEB_URLS[idx];
+    renderWebNavDots();
     updateTeleprompter();
 }
 
-function goCard(idx) {
-    if (idx < 0 || idx >= cards.length) return;
-    if (webMode) exitWebMode(true);
-    currentIdx = idx;
-    const card = cards[idx];
-    const cl = parseFloat(card.style.left || card.offsetLeft);
-    const ct = parseFloat(card.style.top || card.offsetTop);
-    const cw = card.offsetWidth, ch = card.offsetHeight;
-    const scale = Math.min(vw * 0.75 / cw, vh * 0.75 / ch);
-    const tx = vw / 2 - (cl + cw / 2) * scale;
-    const ty = vh / 2 - (ct + ch / 2) * scale;
-    setWorldTransform(tx, ty, scale, true);
-    cards.forEach(c => c.classList.remove('active'));
-    card.classList.add('active');
-    dots.forEach(d => d.classList.remove('active'));
-    clearWebNavActive();
-    dots[idx].classList.add('active');
-    navOverview.classList.remove('active');
-    pageNum.textContent = (idx + 1) + ' / ' + cards.length;
-    updateTeleprompter();
+function updateWelcome() {
+    if (WEB_URLS.length > 0) {
+        // 有网站时直接显示第一个
+        if (currentWebIdx === -1) goWebsite(0);
+    } else {
+        welcome.classList.remove('hide');
+        webLayer.classList.remove('show');
+    }
 }
-
-cards.forEach(card => {
-    card.addEventListener('click', () => {
-        const idx = parseInt(card.dataset.idx);
-        currentIdx === idx ? goOverview() : goCard(idx);
-    });
-});
-dots.forEach(dot => dot.addEventListener('click', () => goCard(parseInt(dot.dataset.idx))));
-navOverview.addEventListener('click', goOverview);
-
-goOverview();
 
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { goOverview(); return; }
     if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
-        if (webMode) {
-            if (currentWebIdx < WEB_URLS.length - 1) goWebsite(currentWebIdx + 1);
-            else goOverview();
-        } else if (currentIdx === cards.length - 1 && WEB_URLS.length > 0) {
-            goWebsite(0);
-        } else {
-            currentIdx < cards.length - 1 ? goCard(currentIdx + 1) : goOverview();
-        }
+        if (currentWebIdx < WEB_URLS.length - 1) goWebsite(currentWebIdx + 1);
     }
     if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (webMode) {
-            if (currentWebIdx > 0) goWebsite(currentWebIdx - 1);
-            else goCard(cards.length - 1);
-        } else {
-            currentIdx > 0 ? goCard(currentIdx - 1) : currentIdx === 0 ? goOverview() : (WEB_URLS.length > 0 ? goWebsite(WEB_URLS.length - 1) : goCard(cards.length - 1));
-        }
+        if (currentWebIdx > 0) goWebsite(currentWebIdx - 1);
     }
 });
 
 setTimeout(() => hint.classList.add('hide'), 5000);
 
 // ========================
-// 画布拖拽
+// 网站管理
 // ========================
-let isDragging = false, dragStartX, dragStartY, dragStartTx, dragStartTy;
-let dragMoved = false;
+function addWebUrl(url) {
+    url = url.trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    WEB_URLS.push(url);
+    renderWebUrlList();
+    renderWebNavDots();
+    updateWelcome();
+}
 
-document.addEventListener('mousedown', e => {
-    if (e.target.closest('.card, .toolbar, .nav-bar, .nav-dot, .nav-overview, .modal-overlay, .web-modal-overlay, .beauty-panel, .webcam-wrap, .cam-toggle, .rec-indicator, .web-layer, button')) return;
-    isDragging = true;
-    dragMoved = false;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    dragStartTx = worldTx;
-    dragStartTy = worldTy;
-    document.body.classList.add('dragging');
-    e.preventDefault();
+function removeWebUrl(idx) {
+    WEB_URLS.splice(idx, 1);
+    renderWebUrlList();
+    renderWebNavDots();
+    if (WEB_URLS.length === 0) {
+        currentWebIdx = -1;
+        webLayer.classList.remove('show');
+        webIframe.src = 'about:blank';
+        welcome.classList.remove('hide');
+    } else if (currentWebIdx >= WEB_URLS.length) {
+        goWebsite(WEB_URLS.length - 1);
+    }
+}
+
+function renderWebUrlList() {
+    if (WEB_URLS.length === 0) {
+        webUrlList.innerHTML = '<div class="web-url-empty">还没有添加网站</div>';
+        return;
+    }
+    webUrlList.innerHTML = WEB_URLS.map((u, i) => `
+        <div class="web-url-item">
+            <span class="idx">${i + 1}</span>
+            <span class="url-text">${u}</span>
+            <button class="go-btn" data-go="${i}">前往</button>
+            <button class="del-btn" data-del="${i}">✕</button>
+        </div>
+    `).join('');
+    webUrlList.querySelectorAll('.go-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            webModal.classList.remove('show');
+            goWebsite(parseInt(btn.dataset.go));
+        });
+    });
+    webUrlList.querySelectorAll('.del-btn').forEach(btn => {
+        btn.addEventListener('click', () => removeWebUrl(parseInt(btn.dataset.del)));
+    });
+}
+
+function renderWebNavDots() {
+    navBar.innerHTML = '';
+    WEB_URLS.forEach((u, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'nav-dot-web' + (i === currentWebIdx ? ' active' : '');
+        btn.dataset.webIdx = i;
+        btn.textContent = '🌐';
+        btn.title = u;
+        btn.addEventListener('click', () => goWebsite(i));
+        navBar.appendChild(btn);
+    });
+}
+
+document.getElementById('welcomeStartBtn').addEventListener('click', () => webModal.classList.add('show'));
+document.getElementById('webBarManage').addEventListener('click', () => webModal.classList.add('show'));
+document.getElementById('closeWebModal').addEventListener('click', () => webModal.classList.remove('show'));
+document.getElementById('webUrlAddBtn').addEventListener('click', () => {
+    addWebUrl(webUrlInput.value);
+    webUrlInput.value = '';
 });
-
-document.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStartX;
-    const dy = e.clientY - dragStartY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved = true;
-    worldTx = dragStartTx + dx;
-    worldTy = dragStartTy + dy;
-    world.style.transform = `translate(${worldTx}px, ${worldTy}px) scale(${worldScale})`;
-});
-
-document.addEventListener('mouseup', () => {
-    if (!isDragging) return;
-    isDragging = false;
-    document.body.classList.remove('dragging');
+webUrlInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addWebUrl(webUrlInput.value);
+        webUrlInput.value = '';
+    }
 });
 
 // ========================
@@ -922,25 +586,23 @@ document.addEventListener('mouseup', () => {
 // ========================
 const webcam = document.getElementById('webcam');
 const camVideo = document.getElementById('camVideo');
-const camBtn = document.getElementById('camBtn');
 const btnCamToggle = document.getElementById('btnCamToggle');
 let camOn = false;
 
 async function startCam() {
     try {
         camVideo.srcObject = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        camOn = true; camBtn.classList.add('on'); camBtn.textContent = '📷 ON';
+        camOn = true;
         btnCamToggle.classList.add('active');
         webcam.classList.remove('off');
     } catch(e) { webcam.classList.add('off'); }
 }
 function stopCam() {
     if (camVideo.srcObject) camVideo.srcObject.getTracks().forEach(t => t.stop());
-    camOn = false; camBtn.classList.remove('on'); camBtn.textContent = '📷';
+    camOn = false;
     btnCamToggle.classList.remove('active');
     webcam.classList.add('off');
 }
-camBtn.addEventListener('click', () => camOn ? stopCam() : startCam());
 btnCamToggle.addEventListener('click', () => camOn ? stopCam() : startCam());
 
 startCam();
@@ -997,7 +659,7 @@ const TELEPROMPTER_CSS = `
 const TELEPROMPTER_HTML = `
     <div class="header">
         <h2>📋 提词器</h2>
-        <span class="page-label" id="pLabel">全景</span>
+        <span class="page-label" id="pLabel">—</span>
     </div>
     <div class="controls">
         <div class="ctrl-row">
@@ -1011,7 +673,7 @@ const TELEPROMPTER_HTML = `
         </div>
     </div>
     <div class="script-area" id="scriptArea">
-        <div class="script-text" id="scriptText">点击卡片开始...</div>
+        <div class="script-text" id="scriptText">选择网站开始...</div>
     </div>
     <div class="note">始终置顶 · 不会出现在录制中</div>
 `;
@@ -1064,15 +726,13 @@ function updateTeleprompter() {
     if (!prompterDoc) return;
     try {
         let label, rawText;
-        if (webMode) {
+        if (currentWebIdx >= 0 && currentWebIdx < WEB_URLS.length) {
+            const url = WEB_URLS[currentWebIdx];
             label = `网站 ${currentWebIdx + 1} / ${WEB_URLS.length}`;
-            rawText = `网站演示中\n\n${WEB_URLS[currentWebIdx] || ''}\n\n[自由演示，按 → 下一页，ESC 回全景]`;
-        } else if (currentIdx === -1) {
-            label = '全景';
-            rawText = '点击卡片进入对应页面\n提词器会自动同步';
+            rawText = SCRIPTS[url] || `正在演示：${url}\n\n[自由演示]`;
         } else {
-            label = `第 ${currentIdx + 1} / ${cards.length}`;
-            rawText = SCRIPTS[currentIdx] || '';
+            label = '—';
+            rawText = '选择网站开始...\n提词器会自动同步当前网站的脚本';
         }
         const html = rawText.replace(/\[([^\]]+)\]/g, '<span class="cue">[$1]</span>');
         const textEl = prompterDoc.getElementById('scriptText');
@@ -1091,110 +751,6 @@ function updateTeleprompter() {
 }
 
 document.getElementById('btnTeleprompter').addEventListener('click', openTeleprompter);
-
-// ========================
-// 网站演示
-// ========================
-function goWebsite(idx) {
-    if (idx < 0 || idx >= WEB_URLS.length) return;
-    webMode = true;
-    currentWebIdx = idx;
-    currentIdx = -1;
-    world.style.display = 'none';
-    webLayer.classList.add('show');
-    webIframe.src = WEB_URLS[idx];
-    webBarUrl.textContent = WEB_URLS[idx];
-    cards.forEach(c => c.classList.remove('active'));
-    dots.forEach(d => d.classList.remove('active'));
-    navOverview.classList.remove('active');
-    clearWebNavActive();
-    const webDots = navBar.querySelectorAll('.nav-dot-web');
-    if (webDots[idx]) webDots[idx].classList.add('active');
-    pageNum.textContent = `🌐 ${idx + 1} / ${WEB_URLS.length}`;
-    updateTeleprompter();
-}
-
-function exitWebMode(silent) {
-    webMode = false;
-    currentWebIdx = -1;
-    webLayer.classList.remove('show');
-    webIframe.src = 'about:blank';
-    world.style.display = '';
-    clearWebNavActive();
-}
-
-function clearWebNavActive() {
-    navBar.querySelectorAll('.nav-dot-web').forEach(d => d.classList.remove('active'));
-}
-
-function addWebUrl(url) {
-    url = url.trim();
-    if (!url) return;
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    WEB_URLS.push(url);
-    renderWebUrlList();
-    renderWebNavDots();
-}
-
-function removeWebUrl(idx) {
-    WEB_URLS.splice(idx, 1);
-    renderWebUrlList();
-    renderWebNavDots();
-    if (webMode && currentWebIdx >= WEB_URLS.length) goOverview();
-}
-
-function renderWebUrlList() {
-    if (WEB_URLS.length === 0) {
-        webUrlList.innerHTML = '<div class="web-url-empty">还没有添加网站</div>';
-        return;
-    }
-    webUrlList.innerHTML = WEB_URLS.map((u, i) => `
-        <div class="web-url-item">
-            <span class="idx">${i + 1}</span>
-            <span class="url-text">${u}</span>
-            <button class="go-btn" data-go="${i}">前往</button>
-            <button class="del-btn" data-del="${i}">✕</button>
-        </div>
-    `).join('');
-    webUrlList.querySelectorAll('.go-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            webModal.classList.remove('show');
-            goWebsite(parseInt(btn.dataset.go));
-        });
-    });
-    webUrlList.querySelectorAll('.del-btn').forEach(btn => {
-        btn.addEventListener('click', () => removeWebUrl(parseInt(btn.dataset.del)));
-    });
-}
-
-function renderWebNavDots() {
-    navBar.querySelectorAll('.nav-dot-web').forEach(d => d.remove());
-    navWebSep.classList.toggle('show', WEB_URLS.length > 0);
-    WEB_URLS.forEach((u, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'nav-dot-web';
-        btn.dataset.webIdx = i;
-        btn.textContent = '🌐';
-        btn.title = u;
-        btn.addEventListener('click', () => goWebsite(i));
-        navBar.appendChild(btn);
-    });
-}
-
-document.getElementById('btnWebsite').addEventListener('click', () => webModal.classList.add('show'));
-document.getElementById('closeWebModal').addEventListener('click', () => webModal.classList.remove('show'));
-document.getElementById('webUrlAddBtn').addEventListener('click', () => {
-    addWebUrl(webUrlInput.value);
-    webUrlInput.value = '';
-});
-webUrlInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        addWebUrl(webUrlInput.value);
-        webUrlInput.value = '';
-    }
-});
-document.getElementById('webBarBack').addEventListener('click', goOverview);
 
 // ========================
 // 录制面板
@@ -1268,7 +824,7 @@ function saveRecording() {
     const a = document.createElement('a');
     const ts = new Date().toISOString().slice(0,19).replace(/[T:]/g, '-');
     a.href = url;
-    a.download = `01fish-{{NUMBER}}-${ts}.webm`;
+    a.download = `录屏-${ts}.webm`;
     a.click();
     URL.revokeObjectURL(url);
     recordedChunks = [];
@@ -1371,31 +927,35 @@ function stopSubtitle() {
 
 btnSubtitle.addEventListener('click', () => subtitleOn ? stopSubtitle() : startSubtitle());
 
+// ========================
+// 初始化：渲染预填网址并显示第一个
+// ========================
+renderWebUrlList();
+renderWebNavDots();
+updateWelcome();
 ```
 
 ---
 
 ## cc 生成流程
 
-1. **读取素材**：根据输入类型获取文章内容
-2. **分析结构**：提取标题、核心数据、痛点、步骤、原理、对比、金句、亮点
-3. **填充 9 张卡片**：根据文章内容选择每张卡片类型中的具体内容
-4. **生成 9 段提词器脚本**：口语化，每段 80-150 字
-5. **输出提词器脚本 md**：`[简短主题]-提词器脚本.md`，用户可直接编辑修改
-6. **组装 HTML**：CSS 框架 + HTML 骨架 + 卡片内容 + JS 框架（SCRIPTS 数组内容与 md 一致）
-7. **输出文件**：`[简短主题]-视频画布.html`
-8. **生成封面图**：`[简短主题]-封面.html`，浏览器打开后可截图/下载为 PNG
-9. **提示用户**：先检查提词器脚本 md，再在浏览器中打开 HTML 录制
+1. **获取输入** — 用户提供：要演示的网址列表 + 简短主题
+2. **生成提词器脚本** — 每个网址对应一段口播（80-150 字）
+3. **输出提词器脚本 md** — `[主题]-提词器脚本.md`，用户可直接编辑
+4. **组装 HTML** — 网址预填 `WEB_URLS` + 提词器脚本填入 `SCRIPTS` + CSS/JS 框架
+5. **输出文件** — `[主题]-视频画布.html`
+6. **生成封面图** — `[主题]-封面.html`（规范见下方）
+7. **提示用户** — 先检查提词器脚本 md，再在浏览器中打开 HTML 录制
 
-> **用户修改提词器脚本后**：告诉 cc "更新提词器"，cc 读取修改后的 md，重新写入 HTML 的 SCRIPTS 数组。
+> **用户修改提词器脚本后**：告诉 cc "更新提词器"，cc 读取修改后的 md，重新写入 HTML 的 SCRIPTS 对象。
 
 ### 输出文件命名
 
-- 默认路径：文章同目录，或 `/tmp/`
+- 默认路径：用户指定目录，或 `/tmp/`
 - 视频画布：`[简短主题]-视频画布.html`
 - 提词器脚本：`[简短主题]-提词器脚本.md`
 - 封面图：`[简短主题]-封面.html`
-- 示例：`AI印书厂-视频画布.html` + `AI印书厂-提词器脚本.md` + `AI印书厂-封面.html`
+- 示例：`AI产品演示-视频画布.html` + `AI产品演示-提词器脚本.md` + `AI产品演示-封面.html`
 
 ---
 
@@ -1406,93 +966,46 @@ cc 输出的 md 文件格式如下，用户可直接编辑后让 cc 更新到 HT
 ```markdown
 # {{主题}} — 提词器脚本
 
-> 每张卡片对应一段口播文案。`[方括号]` 内是给自己看的提示，不念出来。
+> 每个网站对应一段口播文案。`[方括号]` 内是给自己看的提示，不念出来。
 > 修改后告诉 cc "更新提词器"，会自动同步到视频画布 HTML。
 
 ---
 
-## 第 1 页 · 标题卡
+## 网站 1 · {{网站名/简述}}
+
+{{URL}}
 
 {{口播文案}}
 
-[看镜头，停一拍]
+[打开首页，展示主功能]
 
 ---
 
-## 第 2 页 · 数据卡
+## 网站 2 · {{网站名/简述}}
+
+{{URL}}
 
 {{口播文案}}
 
-[让数字沉一下]
+[切换到关键页面]
 
 ---
 
-## 第 3 页 · 痛点卡
-
-{{口播文案}}
-
-[语气坚定]
-
----
-
-## 第 4 页 · 步骤卡
-
-{{口播文案}}
-
-[轻松语气]
-
----
-
-## 第 5 页 · 架构卡
-
-{{口播文案}}
-
-[节奏稍慢，讲清楚]
-
----
-
-## 第 6 页 · 对比卡
-
-{{口播文案}}
-
-[强调重点数字]
-
----
-
-## 第 7 页 · 金句卡
-
-{{口播文案}}
-
-[让金句落地]
-
----
-
-## 第 8 页 · 闭环卡
-
-{{口播文案}}
-
-[语气从平到燃]
-
----
-
-## 第 9 页 · CTA卡
-
-{{口播文案}}
-
-[看镜头，干脆收]
+（每个网站一段，数量与网址列表一致）
 ```
 
 ### cc 解析规则
 
 读取用户修改后的 md 时：
-1. 按 `## 第 N 页` 分割为 9 段
-2. 每段内容（去掉标题行和分隔线）作为 `SCRIPTS[N-1]` 的值
-3. `\n` 保留原始换行
-4. `[方括号内容]` 保留，HTML 中会渲染为灰色提示
+1. 按 `## 网站 N` 分割为 N 段
+2. 每段第一行非空行作为 URL（匹配 `https?://`）
+3. 其余内容（去掉标题行和分隔线）作为 `SCRIPTS[URL]` 的值
+4. `\n` 保留原始换行
+5. `[方括号内容]` 保留，HTML 中会渲染为灰色提示
 
 ### 录制文件命名
 
-HTML 内部自动命名下载文件为 `01fish-{{NUMBER}}-{{时间戳}}.webm`，cc 生成时把 `{{NUMBER}}` 替换为实际期号。固定 16:9 比例，各平台都可直接上传。
+HTML 内部自动命名下载文件为 `录屏-{{时间戳}}.webm`。固定 16:9 比例，各平台都可直接上传。
 
 ---
 
@@ -1664,7 +1177,7 @@ cc 同时生成一个独立的封面 HTML 文件（3:4 竖版，1080x1440），�
 
     <!-- 主内容（左对齐层次结构） -->
     <div class="content">
-        <div class="tag">{{TAG英文，如 AUTO WRITER × OPENCLAW}}</div>
+        <div class="tag">{{TAG英文，如 PRODUCT DEMO × AI}}</div>
         <div class="title">
             {{标题前半}}
             <span class="mega">{{爆炸核心词}}</span>
@@ -1722,8 +1235,8 @@ cc 同时生成一个独立的封面 HTML 文件（3:4 竖版，1080x1440），�
 
 ### 封面文字规则
 
-- `.tag`：用英文关键词组合（如 `AUTO WRITER × OPENCLAW`），全大写，与文章封面一致
-- `.title`：标题前半用白色，核心爆点用 `.mega`（110px 鱼红），与 c1（标题卡）内容一致
+- `.tag`：用英文关键词组合（如 `PRODUCT DEMO × AI`），全大写，与文章封面一致
+- `.title`：标题前半用白色，核心爆点用 `.mega`（110px 鱼红）
 - `.subtitle`：一句话补充说明，24px 半透明白
 - `.stats`：1-2 组核心数据（数字鱼红 + 单位半透明），可选
 - `.bottom-tags`：3-4 个技术/主题标签，与文章封面底部标签一致

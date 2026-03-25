@@ -3,17 +3,12 @@
  *
  * Degradation strategy:
  *   L0: WeChat API → push directly to drafts (no browser needed)
- *   L1: CDP automation → Chrome-based (existing logic)
  *   L3: Manual → output file path for copy-paste
  */
 
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import type { Manifest, PublishResult } from '../cdp-utils.ts';
 import { publishViaApi } from '../wechat-api.ts';
-
-const BAOYU_WECHAT_SKILL_DIR = process.env.BAOYU_WECHAT_SKILL_DIR || '';
 
 export async function publishToWechat(manifest: Manifest, preview: boolean): Promise<PublishResult> {
   const wechatData = manifest.outputs.wechat;
@@ -21,8 +16,16 @@ export async function publishToWechat(manifest: Manifest, preview: boolean): Pro
     return { platform: 'wechat', status: 'skipped', message: 'No WeChat content in manifest' };
   }
 
-  if (!wechatData.markdown || !fs.existsSync(wechatData.markdown)) {
-    return { platform: 'wechat', status: 'manual', message: `Markdown file not found: ${wechatData.markdown}` };
+  // Check for usable content: prefer html, then markdown
+  const hasHtml = wechatData.html && fs.existsSync(wechatData.html);
+  const hasMarkdown = wechatData.markdown && fs.existsSync(wechatData.markdown);
+
+  if (!hasHtml && !hasMarkdown) {
+    return {
+      platform: 'wechat',
+      status: 'manual',
+      message: 'No HTML or Markdown file found in manifest. Provide wechat.html (排版后的 _preview.html) or wechat.markdown.',
+    };
   }
 
   // L0: Try WeChat API direct push (skip in preview mode — user wants the editor)
@@ -36,40 +39,15 @@ export async function publishToWechat(manifest: Manifest, preview: boolean): Pro
       };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      console.log(`  [wechat] API mode failed, falling back to CDP: ${reason}`);
+      console.log(`  [wechat] API mode failed: ${reason}`);
     }
   }
 
-  // L1: CDP automation fallback
-  const scriptPath = path.join(BAOYU_WECHAT_SKILL_DIR, 'scripts', 'wechat-article.ts');
-  if (!fs.existsSync(scriptPath)) {
-    return { platform: 'wechat', status: 'manual', message: `baoyu-post-to-wechat script not found: ${scriptPath}` };
-  }
-
-  const args = [scriptPath, wechatData.markdown, '--theme', 'grace'];
-  if (!preview) {
-    args.push('--submit');
-  }
-
-  console.log(`  Running: npx -y bun ${args.join(' ')}`);
-
-  const result = spawnSync('npx', ['-y', 'bun', ...args], {
-    stdio: 'inherit',
-    timeout: 120_000,
-  });
-
-  if (result.status === 0) {
-    return {
-      platform: 'wechat',
-      status: preview ? 'assisted' : 'success',
-      message: preview ? 'Article opened in WeChat editor' : 'Article published to WeChat',
-    };
-  }
-
-  // L3: Manual fallback
+  // L3: Manual fallback — no more CDP automation
+  const filePath = hasHtml ? wechatData.html : wechatData.markdown;
   return {
     platform: 'wechat',
     status: 'manual',
-    message: `Script failed (exit ${result.status}). Markdown file: ${wechatData.markdown}`,
+    message: `API publish failed or preview mode. File: ${filePath}`,
   };
 }

@@ -10,7 +10,7 @@
 |------|-----|
 | API 地址 | `https://api.fish.audio/v1/tts` |
 | API Key | 环境变量 `FISH_API_KEY`（在 `local/.env` 中配置） |
-| Voice ID | `5ff3a1267d6b4677872a9f3331c1a7a2`（鱼头的声音模型） |
+| Voice ID | `YOUR_VOICE_ID_HERE`（你的声音模型 ID，在 Fish Audio 控制台获取） |
 | 输出格式 | MP3 |
 
 ---
@@ -32,7 +32,7 @@
 import httpx, os
 
 API_KEY = os.environ.get("FISH_API_KEY", "")
-VOICE_ID = "5ff3a1267d6b4677872a9f3331c1a7a2"
+VOICE_ID = "YOUR_VOICE_ID_HERE"
 
 def generate_podcast(script_path: str, output_path: str):
     with open(script_path, "r", encoding="utf-8") as f:

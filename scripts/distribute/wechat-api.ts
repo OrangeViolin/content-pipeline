@@ -4,7 +4,6 @@
  * bypassing Chrome CDP automation entirely.
  */
 
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,8 +23,6 @@ const TOKEN_CACHE_FILE = path.join(CONFIG_DIR, 'token-cache.json');
 const TOKEN_LIFETIME_MS = 2 * 60 * 60 * 1000; // 2 hours
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // refresh 5 min early
 
-const MD_TO_WECHAT_SCRIPT = process.env.MD_TO_WECHAT_SCRIPT || path.join(import.meta.dirname, '../../baoyu-post-to-wechat/scripts/md-to-wechat.ts');
-
 // ─── Types ───
 
 interface Credentials {
@@ -36,18 +33,6 @@ interface Credentials {
 interface TokenCache {
   accessToken: string;
   expiresAt: number; // epoch ms
-}
-
-interface MdToWechatOutput {
-  title: string;
-  author?: string;
-  summary?: string;
-  htmlPath: string;
-  contentImages: Array<{
-    placeholder: string;
-    localPath: string;
-    originalPath: string;
-  }>;
 }
 
 // ─── Retry helper ───
@@ -179,36 +164,85 @@ export async function uploadCoverImage(token: string, imagePath: string): Promis
   return data.media_id;
 }
 
-// ─── Markdown Conversion ───
+// ─── HTML Processing ───
 
-export function convertMarkdown(markdownPath: string): MdToWechatOutput {
-  console.log('  [wechat-api] Converting markdown to HTML...');
+/** Fix HTML structures that WeChat cannot render properly */
+export function fixHtmlForWechat(html: string): string {
+  let fixed = html;
 
-  const scriptDir = path.dirname(MD_TO_WECHAT_SCRIPT);
-  const result = spawnSync('npx', ['-y', 'bun', MD_TO_WECHAT_SCRIPT, markdownPath, '--theme', 'grace'], {
-    cwd: scriptDir,
-    timeout: 60_000,
-    encoding: 'utf-8',
+  // Fix <p><figure>...</figure></p> nesting — WeChat cannot render block elements inside <p>
+  // Extract <figure> out of <p> and convert to <section> for WeChat compatibility
+  fixed = fixed.replace(/<p[^>]*>\s*(<figure[\s\S]*?<\/figure>)\s*<\/p>/gi, (_match, figureContent: string) => {
+    // Convert <figure> to <section> to avoid WeChat's block-in-inline issues
+    return figureContent
+      .replace(/<figure/gi, '<section')
+      .replace(/<\/figure>/gi, '</section>');
   });
 
-  if (result.status !== 0) {
-    const stderr = result.stderr?.trim() || '';
-    throw new Error(`md-to-wechat failed (exit ${result.status})${stderr ? `: ${stderr}` : ''}`);
-  }
+  // Also handle standalone <figure> tags — convert to <section>
+  fixed = fixed.replace(/<figure([^>]*)>/gi, '<section$1>');
+  fixed = fixed.replace(/<\/figure>/gi, '</section>');
 
-  const stdout = result.stdout?.trim();
-  if (!stdout) throw new Error('md-to-wechat produced no output');
+  // Normalize <img> styles for WeChat compatibility
+  fixed = fixed.replace(/<img([^>]*?)>/gi, (_match, attrs: string) => {
+    // Remove existing style attribute
+    const cleanAttrs = attrs.replace(/\s*style="[^"]*"/gi, '').replace(/\s*style='[^']*'/gi, '');
+    const wechatStyle = 'style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;"';
+    return `<img${cleanAttrs} ${wechatStyle}>`;
+  });
 
-  // The script outputs JSON to stdout
-  const output = JSON.parse(stdout) as MdToWechatOutput;
-  if (!output.htmlPath || !fs.existsSync(output.htmlPath)) {
-    throw new Error(`HTML file not found: ${output.htmlPath}`);
-  }
-
-  return output;
+  return fixed;
 }
 
-// ─── HTML Processing ───
+/** Scan HTML for local image paths (src="/Users/...") and upload them to WeChat CDN */
+export async function uploadLocalImagesInHtml(html: string, token: string): Promise<string> {
+  // Match src attributes with local file paths (absolute paths starting with /)
+  const localImgRegex = /src=["'](\/(Users|home|tmp|var)[^"']+\.(?:png|jpg|jpeg|gif|webp|bmp))["']/gi;
+  const matches: Array<{ full: string; localPath: string }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = localImgRegex.exec(html)) !== null) {
+    matches.push({ full: match[0], localPath: match[1] });
+  }
+
+  if (matches.length === 0) return html;
+
+  console.log(`  [wechat-api] Found ${matches.length} local image(s) to upload...`);
+
+  let processed = html;
+  let uploaded = 0;
+  let failed = 0;
+
+  for (const { full, localPath } of matches) {
+    // Handle URL-encoded paths (e.g. Chinese filenames)
+    let decodedPath: string;
+    try {
+      decodedPath = decodeURIComponent(localPath);
+    } catch {
+      decodedPath = localPath;
+    }
+
+    if (!fs.existsSync(decodedPath)) {
+      console.warn(`  [wechat-api]   ✗ Not found: ${decodedPath}`);
+      failed++;
+      continue;
+    }
+
+    try {
+      const cdnUrl = await uploadContentImage(token, decodedPath);
+      const newSrc = `src="${cdnUrl}"`;
+      processed = processed.replace(full, newSrc);
+      uploaded++;
+      console.log(`  [wechat-api]   ✓ ${path.basename(decodedPath)}`);
+    } catch (err) {
+      console.warn(`  [wechat-api]   ✗ ${path.basename(decodedPath)}: ${err instanceof Error ? err.message : err}`);
+      failed++;
+    }
+  }
+
+  console.log(`  [wechat-api] Local images: ${uploaded} uploaded, ${failed} failed`);
+  return processed;
+}
 
 export function extractArticleContent(htmlPath: string): { content: string; styles: string } {
   const html = fs.readFileSync(htmlPath, 'utf-8');
@@ -253,7 +287,8 @@ export function processHtmlWithImages(
   styles: string,
   imageMap: Map<string, string>,
 ): string {
-  let processed = content;
+  // Fix HTML structures for WeChat compatibility first
+  let processed = fixHtmlForWechat(content);
 
   // Replace [[IMAGE_PLACEHOLDER_N]] with <img> tags pointing to WeChat CDN
   for (const [placeholder, cdnUrl] of imageMap) {
@@ -321,7 +356,25 @@ export async function createDraft(
 
 export async function publishViaApi(manifest: Manifest): Promise<{ mediaId: string }> {
   const wechatData = manifest.outputs.wechat;
-  if (!wechatData?.markdown) throw new Error('No wechat markdown in manifest');
+  if (!wechatData) throw new Error('No wechat data in manifest');
+
+  // Validate: need at least html (or markdown), cover_image, and title
+  const hasHtml = wechatData.html && fs.existsSync(wechatData.html);
+  const hasMarkdown = wechatData.markdown && fs.existsSync(wechatData.markdown);
+
+  if (!hasHtml && hasMarkdown) {
+    throw new Error(
+      'Markdown-only mode is no longer supported in wechat-api.ts.\n' +
+      'Please convert markdown to HTML first using md2wechat_formatter.py:\n' +
+      '  cd "$MD_FORMATTER_DIR"\n' +
+      '  python3 md2wechat_formatter.py [article.md] --theme 01fish --font-size medium\n' +
+      'Then set wechat.html in the manifest to the generated _preview.html path.'
+    );
+  }
+
+  if (!hasHtml) {
+    throw new Error('No wechat HTML file in manifest. Provide wechat.html pointing to a _preview.html file.');
+  }
 
   // 1. Load credentials
   const creds = loadCredentials();
@@ -332,57 +385,83 @@ export async function publishViaApi(manifest: Manifest): Promise<{ mediaId: stri
   // 2. Get access token
   const token = await getAccessToken(creds);
 
-  // 3. Convert markdown to HTML (unless pre-rendered HTML provided)
-  let title: string;
-  let author: string | undefined;
-  let digest: string | undefined;
-  let htmlContent: string;
-  let styles = '';
-  let contentImages: MdToWechatOutput['contentImages'] = [];
+  // 3. Extract content from pre-rendered HTML
+  console.log('  [wechat-api] Using pre-rendered HTML');
+  const extracted = extractArticleContent(wechatData.html!);
+  let htmlContent = extracted.content;
+  // styles stays '' — pre-rendered HTML needs no <style> wrapper
+  const title = wechatData.title || manifest.title;
+  const author = wechatData.author;
+  const digest = wechatData.digest;
 
-  if (wechatData.html && fs.existsSync(wechatData.html)) {
-    // Use pre-rendered HTML — all styles are already inline on elements,
-    // page-level <style> (body/max-width/.tip) is irrelevant for WeChat
-    console.log('  [wechat-api] Using pre-rendered HTML');
-    const extracted = extractArticleContent(wechatData.html);
-    htmlContent = extracted.content;
-    // styles stays '' — pre-rendered HTML needs no <style> wrapper
-    title = wechatData.title || manifest.title;
-    author = wechatData.author;
-    digest = wechatData.digest;
-  } else {
-    // Convert markdown
-    const mdOutput = convertMarkdown(wechatData.markdown);
-    const extracted = extractArticleContent(mdOutput.htmlPath);
-    htmlContent = extracted.content;
-    styles = extracted.styles;
-    title = wechatData.title || mdOutput.title || manifest.title;
-    author = wechatData.author || mdOutput.author;
-    digest = wechatData.digest || mdOutput.summary;
-    contentImages = mdOutput.contentImages || [];
-  }
-
-  // 4. Upload content images and build placeholder→URL map
+  // 4. Process HTML with placeholder images (if any from old workflow)
   const imageMap = new Map<string, string>();
-  if (contentImages.length > 0) {
-    console.log(`  [wechat-api] Uploading ${contentImages.length} content image(s)...`);
-    for (const img of contentImages) {
-      if (!fs.existsSync(img.localPath)) {
-        console.warn(`  [wechat-api] Image not found, skipping: ${img.localPath}`);
+  const finalContent = processHtmlWithImages(htmlContent, '', imageMap);
+
+  // 5. Upload local images referenced in HTML to WeChat CDN
+  let contentWithCdnImages = await uploadLocalImagesInHtml(finalContent, token);
+
+  // 5.5 Upload manifest images and insert into article content
+  if (wechatData.images && wechatData.images.length > 0) {
+    console.log(`  [wechat-api] Uploading ${wechatData.images.length} article image(s)...`);
+    const uploadedImages: Array<{ cdnUrl: string; fileName: string }> = [];
+
+    for (const imgPath of wechatData.images) {
+      if (!fs.existsSync(imgPath)) {
+        console.warn(`  [wechat-api]   ✗ Image not found: ${imgPath}`);
         continue;
       }
       try {
-        const cdnUrl = await uploadContentImage(token, img.localPath);
-        imageMap.set(img.placeholder, cdnUrl);
-        console.log(`  [wechat-api]   ✓ ${path.basename(img.localPath)}`);
+        const cdnUrl = await uploadContentImage(token, imgPath);
+        uploadedImages.push({ cdnUrl, fileName: path.basename(imgPath) });
+        console.log(`  [wechat-api]   ✓ ${path.basename(imgPath)}`);
       } catch (err) {
-        console.warn(`  [wechat-api]   ✗ ${path.basename(img.localPath)}: ${err instanceof Error ? err.message : err}`);
+        console.warn(`  [wechat-api]   ✗ ${path.basename(imgPath)}: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
+    if (uploadedImages.length > 0) {
+      // Strategy: insert images at matching placeholder comments in HTML,
+      // or append them at the end of the article if no placeholders found.
+      //
+      // Placeholder format in HTML: <!-- IMAGE:filename.png -->
+      // If manifest provides image_positions (map of filename → CSS selector or section title),
+      // we try to insert after matching elements.
+      let insertedCount = 0;
+
+      for (const { cdnUrl, fileName } of uploadedImages) {
+        const imgTag = `<section style="text-align:center;margin:20px 0;"><img src="${cdnUrl}" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;" /></section>`;
+
+        // Try placeholder comment: <!-- IMAGE:配图-1.png -->
+        const placeholder = `<!-- IMAGE:${fileName} -->`;
+        if (contentWithCdnImages.includes(placeholder)) {
+          contentWithCdnImages = contentWithCdnImages.replace(placeholder, imgTag);
+          insertedCount++;
+          continue;
+        }
+
+        // Try matching by partial filename (without extension)
+        const baseName = fileName.replace(/\.[^.]+$/, '');
+        const altPlaceholder = `<!-- IMAGE:${baseName} -->`;
+        if (contentWithCdnImages.includes(altPlaceholder)) {
+          contentWithCdnImages = contentWithCdnImages.replace(altPlaceholder, imgTag);
+          insertedCount++;
+          continue;
+        }
+      }
+
+      // If no placeholders were found, append all images at the end (before closing)
+      if (insertedCount === 0) {
+        console.log(`  [wechat-api] No image placeholders found in HTML, appending ${uploadedImages.length} image(s) at end`);
+        const allImgTags = uploadedImages
+          .map(({ cdnUrl }) => `<section style="text-align:center;margin:20px 0;"><img src="${cdnUrl}" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;" /></section>`)
+          .join('\n');
+        contentWithCdnImages += '\n' + allImgTags;
+      } else {
+        console.log(`  [wechat-api] Inserted ${insertedCount}/${uploadedImages.length} image(s) at placeholder positions`);
       }
     }
   }
-
-  // 5. Process HTML with uploaded image URLs
-  const finalContent = processHtmlWithImages(htmlContent, styles, imageMap);
 
   // 6. Upload cover image (required for draft)
   let thumbMediaId: string;
@@ -392,12 +471,8 @@ export async function publishViaApi(manifest: Manifest): Promise<{ mediaId: stri
     console.log('  [wechat-api] Uploading cover image...');
     thumbMediaId = await uploadCoverImage(token, coverPath);
   } else if (wechatData.images && wechatData.images.length > 0 && fs.existsSync(wechatData.images[0])) {
-    // Fallback: use first content image as cover
     console.log('  [wechat-api] No cover image specified, using first content image...');
     thumbMediaId = await uploadCoverImage(token, wechatData.images[0]);
-  } else if (contentImages.length > 0 && fs.existsSync(contentImages[0].localPath)) {
-    console.log('  [wechat-api] No cover image specified, using first article image...');
-    thumbMediaId = await uploadCoverImage(token, contentImages[0].localPath);
   } else {
     throw new Error('No cover image available. Provide cover_image in manifest or ensure article has images.');
   }
@@ -406,7 +481,7 @@ export async function publishViaApi(manifest: Manifest): Promise<{ mediaId: stri
   console.log('  [wechat-api] Creating draft...');
   const draft = await createDraft(token, {
     title,
-    content: finalContent,
+    content: contentWithCdnImages,
     author,
     digest,
     thumb_media_id: thumbMediaId,
