@@ -375,9 +375,9 @@ python3 "${SKILL_DIR}/scripts/fetch_wechat_article.py" "<URL>" --json
 
 ### 第 8 步：AI 语音生成
 
-使用 Fish Audio TTS 将播客脚本转为 MP3（→ 读 `references/tts-config.md`）。
+通过 SSH 连接 Ubuntu 机器，使用 IndexTTS2 本地生成（零样本声音克隆）（→ 读 `references/tts-config.md`）。
 
-**百家讲坛模式的 TTS 调整**：15 分钟脚本约 4000 字，分段大小从 800 字降为 600 字（更短分段带来更好的语音节奏），预计 6-7 段，生成时间 5-8 分钟。
+**百家讲坛模式的 TTS 调整**：15 分钟脚本约 4000 字，分段大小 600 字（更短分段带来更好的语音节奏），预计 6-7 段。
 
 文件命名：`[播客标题].mp3` + `[播客标题]-播客脚本.md`
 
@@ -455,7 +455,7 @@ npx remotion render src/index.ts Outro --output /tmp/brand-outro.mp4
 
 **单独触发 `/podcast` 时，产出三样：**
 1. 播客脚本 md（15 分钟百家讲坛风格，3800-4200 字）
-2. AI 语音 MP3（Fish Audio TTS）
+2. AI 语音 MP3（IndexTTS2 本地生成）
 3. 节目封面 HTML（3000×3000，浏览器下载 PNG）
 4. 小宇宙发布文案（标题 + 简介 + 完整文稿）
 5. manifest.json
@@ -649,7 +649,7 @@ cc 按需读取，不要一次性加载所有 reference。
 | 横版→竖版封面 | `references/cover-vertical-spec.md` — 公众号封面转竖版的 CSS 转换规范 |
 | 生成小红书轮播图 | `references/xiaohongshu-format.md` — HTML 模板 + 视觉组件库 |
 | 生成各平台文案 | `references/platform-copy.md` — 小红书/即刻/播客/朋友圈文案规范 |
-| 生成播客音频 | `references/tts-config.md` — Fish Audio 配置 + 生成脚本 |
+| 生成播客音频 | `references/tts-config.md` — IndexTTS2 本地 TTS 配置 + 生成脚本 |
 | 小宇宙播客（百家讲坛） | `references/xiaoyuzhou-podcast.md` — 15分钟讲书人风格脚本规范 + 改编流程 + 发布配置 |
 | 播客节目封面 | `references/podcast-cover-template.md` — 3000×3000 正方形封面 HTML 模板 |
 | 史记罗生门栏目 | `references/shiji-luoshengmen.md` — 栏目品牌设定 + AI侦探风格 + 脚本结构 |
@@ -668,5 +668,5 @@ cc 按需读取，不要一次性加载所有 reference。
 | 导出图片模糊 | 检查 SCALE=2，浏览器缩放 100% |
 | manifest 不存在 | 提示先运行内容生成 |
 | Chrome 启动失败 | 降级 L3（手动模式） |
-| TTS 402 余额不足 | 提示去 fish.audio 充值 |
+| IndexTTS2 模型加载失败 | 检查 checkpoints 目录和 infer_v2 导入 |
 | TTS 生成失败 | 只输出脚本文本，提示手动录制 |

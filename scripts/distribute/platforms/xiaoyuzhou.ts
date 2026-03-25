@@ -10,7 +10,7 @@ import {
   type Manifest, type PublishResult, type ChromeSession,
 } from '../cdp-utils.ts';
 
-const XIAOYUZHOU_URL = 'https://podcasters.xiaoyuzhoufm.com/';
+const XIAOYUZHOU_URL = 'https://studio.xiaoyuzhoufm.com/';
 
 const SELECTORS = {
   newEpisodeBtn: 'a[href*="episode/new"], button:has-text("新建节目"), a:has-text("新建")',
@@ -55,7 +55,7 @@ export async function publishToXiaoyuzhou(manifest: Manifest, preview: boolean):
     let session: ChromeSession | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        session = await getPageSession(cdp, 'xiaoyuzhoufm.com');
+        session = await getPageSession(cdp, 'studio.xiaoyuzhoufm.com');
         break;
       } catch {
         await sleep(3000);

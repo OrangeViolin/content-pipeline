@@ -53,8 +53,9 @@ cp ~/.claude/skills/content-pipeline/.env.example ~/.claude/skills/content-pipel
 编辑 `local/.env`，填入你的密钥：
 
 ```bash
-# 播客语音生成（Fish Audio）
-FISH_API_KEY=你的_Fish_Audio_API_Key
+# 播客语音生成（IndexTTS2，本地运行）
+INDEXTTS_DIR=~/index-tts
+VOICE_REF=/path/to/your/voice_ref.wav
 
 # 公众号 API（可选，用于自动推送草稿箱）
 WECHAT_APPID=你的_AppID
@@ -79,7 +80,7 @@ MD_FORMATTER_DIR=/path/to/your/md-formatter
 - 品牌色文档路径：/path/to/your/brand-colors.md
 
 ## TTS 声音
-在 local/.env 中配置 Voice ID（Fish Audio 控制台获取）
+在 local/.env 中配置 INDEXTTS_DIR 和 VOICE_REF 路径
 ```
 
 ### 4. 开始使用
@@ -132,15 +133,15 @@ CC 在和你聊天的过程中会自动识别"有料时刻"（踩坑、意外发
 
 ### AI 语音生成
 
-支持两种 TTS 引擎：
+**IndexTTS2**（开源，MIT 协议，本地运行）：
 
-| | Fish Audio | IndexTTS2 |
-|---|---|---|
-| 费用 | 按量付费 API | 免费，本地运行 |
-| 网络 | 必须联网 | 离线可用 |
-| 速度 | 快（云端 GPU） | 慢（Apple Silicon ~10x RTF） |
-| 克隆 | 需上传训练 | 2-10 秒参考即可 |
-| 配置 | `local/.env` 中的 `FISH_API_KEY` | 本地安装 [IndexTTS2](https://github.com/index-tts/index-tts) |
+| 特性 | 说明 |
+|------|------|
+| 费用 | 免费 |
+| 网络 | 离线可用 |
+| 声音克隆 | 2-10 秒参考音频即可 |
+| 速度 | Apple Silicon ~10x RTF（15 分钟播客约 27 分钟生成） |
+| 安装 | [IndexTTS2](https://github.com/index-tts/index-tts)，详见 `references/tts-config.md` |
 
 ### 子栏目支持
 
@@ -169,7 +170,7 @@ content-pipeline/
 │   ├── cover-vertical-spec.md     #    竖版封面转换规范
 │   ├── xiaohongshu-format.md      #    小红书轮播图 HTML 模板
 │   ├── platform-copy.md           #    各平台文案规范
-│   ├── tts-config.md              #    Fish Audio TTS 配置
+│   ├── tts-config.md              #    IndexTTS2 本地 TTS 配置
 │   ├── xiaoyuzhou-podcast.md      #    小宇宙播客脚本规范（百家讲坛风格）
 │   ├── podcast-cover-template.md  #    播客封面 HTML 模板
 │   ├── shiji-luoshengmen.md       #    史记罗生门栏目品牌设定（子栏目示例）
@@ -200,7 +201,7 @@ content-pipeline/
 
 | 内容 | 位置 | 保护方式 |
 |------|------|---------|
-| API 密钥（Fish Audio、微信） | `local/.env` | `.gitignore` 排除 `local/` |
+| API 密钥（微信等） | `local/.env` | `.gitignore` 排除 `local/` |
 | 个人信息（微信号、路径） | `local/SKILL.local.md` | `.gitignore` 排除 `local/` |
 | 声音模型 ID | `local/.env` | `.gitignore` 排除 `local/` |
 | Token 缓存 | `token-cache.json` | `.gitignore` 单独排除 |
