@@ -1,6 +1,6 @@
 ---
 name: content-pipeline
-description: 内容生产和分发统一管线。素材收集→出稿→排版→封面→朋友圈文案→多平台转换→一键分发。涵盖公众号写作、小红书轮播图、即刻文案、播客音频、品牌视频、Chrome CDP 自动发布。
+description: 内容生产和分发统一管线。素材收集→出稿→排版→封面→朋友圈文案→多平台转换→一键分发。涵盖公众号写作、小红书轮播图、即刻文案、播客音频、品牌视频、Chrome CDP 自动发布，以及 CSDN / 博客园 / 知乎 requests 直发。
 ---
 
 # 内容管线 Content Pipeline
@@ -90,6 +90,9 @@ description: 内容生产和分发统一管线。素材收集→出稿→排版�
 | "全平台发布" | 同上 |
 | "发布到小红书" | 单平台发布 |
 | "发布到即刻" | 单平台发布 |
+| "发布到 CSDN" / "发 CSDN" | CSDN 直发（requests API） |
+| "发布到博客园" | 博客园直发（requests API） |
+| "发布到知乎" | 知乎直发（requests API） |
 
 ---
 
@@ -529,6 +532,31 @@ npx -y bun "${SKILL_DIR}/scripts/distribute/distribute.ts" --manifest /path/to/m
 5. 上传封面图获取 `thumb_media_id`
 6. 调用 `draft/add` 创建草稿
 
+### CSDN / 博客园 / 知乎（requests 直发）
+
+这三个平台不走 CDP，而是用**纯 requests 直连官方编辑器 API**，无需启动 Chrome。脚本自包含，
+不依赖任何 Booker\* 仓库。
+
+```bash
+pip install requests browser_cookie3            # 共同依赖
+pip install quickjs markdown                    # 知乎签名 / CSDN 渲染（可选）
+
+# CSDN：默认直接发布，发布后删除源 md；-d 存草稿，-del <ID> 删除
+python3 "${SKILL_DIR}/scripts/csdn.py" 文章.md [-ct 分类] [-tg 标签1,标签2] [-d]
+
+# 博客园：默认直接发布；--no-publish 存草稿，--images 上传本地图片
+python3 "${SKILL_DIR}/scripts/cnblogs.py" 文章.md [--no-publish] [-c 分类] [-t a,b] [--images]
+
+# 知乎：默认发布到主页；-i N 发布到第 N 个专栏，-n 只预览
+python3 "${SKILL_DIR}/scripts/zhihu.py" 文章.md [-i 1] [-n]
+```
+
+**共同规则**：
+- Cookie 默认从本机浏览器（Firefox → Chrome → Edge）自动提取，先确保已在浏览器登录对应站点；
+- CSDN 可用 `-c` 传 cookie 字符串或 JSON 文件；
+- 发布成功后默认删除源 md（避免重复发帖）；`--dry-run`（cnblogs/zhihu）只预览不删除；
+- 三者都保留 `reg_subparser(subparsers)`，可被任意 argparse CLI 注册为 `csdn` / `cnblogs` / `zhihu` 子命令。
+
 ---
 
 ## 品牌设计规范
@@ -629,6 +657,12 @@ font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 | Script | Purpose |
 |--------|---------|
 | `scripts/fetch_wechat_article.py` | 微信文章抓取（Python，模拟微信 UA） |
+| `scripts/csdn.py` | CSDN 文章发布（requests + HMAC 签名） |
+| `scripts/cnblogs.py` | 博客园文章发布（requests API） |
+| `scripts/zhihu.py` | 知乎文章发布（requests + zse 签名） |
+| `scripts/zhihu_sign.py` | 知乎 x-zse 签名（自包含，依赖 quickjs） |
+| `scripts/module1514.js` | 知乎加密模块 1514 原代码（zhihu_sign 数据文件） |
+| `scripts/pub_util.py` | 发布脚本公用工具：浏览器 cookie 提取 / Markdown 标题 |
 | `scripts/distribute/distribute.ts` | 分发主编排器 |
 | `scripts/distribute/cdp-utils.ts` | 共享 CDP 工具 + Manifest 类型定义 |
 | `scripts/distribute/wechat-api.ts` | 公众号 API 客户端（token 管理、图片上传、草稿创建） |

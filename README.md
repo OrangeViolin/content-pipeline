@@ -69,6 +69,9 @@
 |:----:|:----:|:------:|:-----|
 | 🟢 公众号 | API 直推 | **精打磨** | 出稿 + 排版 + 封面 + 配图 + 草稿箱直推，反复迭代过 |
 | 🟢 小红书 | Chrome CDP | **精打磨** | 自动生成轮播图 + 文案，真实场景跑过很多次 |
+| 🟢 CSDN | requests API | **可用** | 签名直连编辑器 API，发布 / 存草稿 / 删除 |
+| 🟢 博客园 | requests API | **可用** | 直连发帖 API，支持分类、标签、本地图片上传 |
+| 🟢 知乎 | requests API | **可用** | 草稿 → 正文 → 发布，可发布到专栏 |
 | 🟡 即刻 | Chrome CDP | **可用，待打磨** | 功能做了，能跑，但还没反复迭代 |
 | 🟡 小宇宙 | Chrome CDP | **可用，待打磨** | 播客上传 + 节目信息，基本能用 |
 | 🟡 抖音 | Chrome CDP | **实验性** | 视频发布，偶尔需要手动补一下 |
@@ -239,6 +242,25 @@ Claude Code 在对话中会自动识别"有料时刻"（踩坑翻车、意外发
 
 ---
 
+## 📤 CSDN / 博客园 / 知乎 直发
+
+除了 `/distribute` 的浏览器自动化，`scripts/` 下还有三个**纯 requests 直连 API** 的发布脚本，不启动 Chrome：
+
+```bash
+pip install requests browser_cookie3            # 三者共同依赖
+pip install quickjs markdown                    # 知乎 zse 签名 / CSDN HTML 渲染（可选）
+
+python scripts/csdn.py 文章.md                   # CSDN：默认发布，-d 存草稿，-del <ID> 删除
+python scripts/cnblogs.py 文章.md                # 博客园：默认发布，--no-publish 存草稿
+python scripts/zhihu.py 文章.md                  # 知乎：发布到主页，-i 1 发布到第 1 个专栏
+```
+
+- Cookie 默认从本机浏览器（Firefox → Chrome → Edge）自动提取，请先在浏览器登录对应站点。
+- 发布成功后默认删除源 md（避免重复发帖）；`--dry-run` 只预览、不删除（cnblogs / zhihu）。
+- 完全自包含：`pub_util.py`（cookie 提取 / Markdown 标题）、`zhihu_sign.py` + `module1514.js`（知乎签名）都已内联，**不依赖任何 Booker\* 仓库**。
+
+---
+
 ## 📂 项目结构
 
 ```
@@ -265,6 +287,13 @@ content-pipeline/
 │
 └── scripts/                       # ⚙️ 自动化脚本
     ├── fetch_wechat_article.py    #    微信文章抓取
+    ├── md2wechat_formatter.py     #    Markdown → 公众号 HTML 排版
+    ├── csdn.py                    #    CSDN 直发（HMAC 签名 + requests）
+    ├── cnblogs.py                 #    博客园直发（requests API）
+    ├── zhihu.py                   #    知乎直发（zse 签名 + requests）
+    ├── zhihu_sign.py              #    知乎 x-zse 签名（内联）
+    ├── module1514.js              #    知乎加密模块 1514（内联）
+    ├── pub_util.py                #    发布脚本公用工具：cookie / 标题（内联）
     └── distribute/                #    多平台分发引擎
         ├── distribute.ts          #       编排器
         ├── wechat-api.ts          #       公众号 API
@@ -315,6 +344,7 @@ AI 生成的内容必须诚实标注，不装人类。
 - [x] 播客全流程（脚本 + AI 语音克隆 + 封面）
 - [x] 录屏画布（网页演示 + 摄像头 + 提词器）
 - [x] 多平台一键分发（Chrome CDP + WeChat API）
+- [x] CSDN / 博客园 / 知乎 直发（requests API，自包含脚本）
 - [ ] 视频号发布
 - [ ] 更多 TTS 引擎
 - [ ] Web UI 管理面板
