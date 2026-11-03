@@ -72,6 +72,8 @@
 | 🟢 CSDN | requests API | **可用** | 签名直连编辑器 API，发布 / 存草稿 / 删除 |
 | 🟢 博客园 | requests API | **可用** | 直连发帖 API，支持分类、标签、本地图片上传 |
 | 🟢 知乎 | requests API | **可用** | 草稿 → 正文 → 发布，可发布到专栏 |
+| 🟢 头条号 | requests API | **可用** | 表单直发，正文图片自动上传 |
+| 🟡 微博 | Playwright | **可用，待打磨** | MD 自动拆分为多段微博，支持预览 / 人工登录兜底 |
 | 🟡 即刻 | Chrome CDP | **可用，待打磨** | 功能做了，能跑，但还没反复迭代 |
 | 🟡 小宇宙 | Chrome CDP | **可用，待打磨** | 播客上传 + 节目信息，基本能用 |
 | 🟡 抖音 | Chrome CDP | **实验性** | 视频发布，偶尔需要手动补一下 |
@@ -261,6 +263,39 @@ python scripts/zhihu.py 文章.md                  # 知乎：发布到主页，
 
 ---
 
+## 📤 微博 / 头条号 发布
+
+**微博**（Playwright，可见浏览器；无人工登录时用 `--cookie`）：
+
+```bash
+pip install playwright browser_cookie3
+playwright install chromium
+
+python scripts/weibo.py --input 文章.md            # 默认发布
+python scripts/weibo.py --input 文章.md --preview   # 只预填、不点发布
+```
+
+- `--input` 支持文件或目录，每篇 Markdown 自动转为纯文本并按段落拆成多条微博；
+- `--max-chars`（默认 2000）控制单条长度，`--no-title` 关闭首行标题；
+- 发布按钮定位失败时自动进入「辅助模式」，内容留在浏览器中供人工点击发布。
+
+**头条号**（requests 直连 API，参照 CSDN）：
+
+```bash
+pip install requests browser_cookie3 pyquery markdown   # pillow 可选（图片转 PNG）
+
+python scripts/toutiao.py 文章.md                  # 默认发布
+python scripts/toutiao.py 文章.md -d               # 存草稿
+python scripts/toutiao.py --del-id <pgc_id>        # 删除草稿
+```
+
+- 正文转 HTML 后自动上传图片（本地相对路径 / base64 / http 均可）；
+- Cookie 默认从本机浏览器（Firefox → Chrome → Edge）提取，请先登录头条号后台。
+
+两个脚本同样自包含：Playwright 驱动与 stealth 注入资源（`stealth.min.js` / `patch_env_mock_wasm.js`）随 `pub_util.py` 一并内联，**不依赖任何 Booker\* 仓库**。
+
+---
+
 ## 📂 项目结构
 
 ```
@@ -293,7 +328,11 @@ content-pipeline/
     ├── zhihu.py                   #    知乎直发（zse 签名 + requests）
     ├── zhihu_sign.py              #    知乎 x-zse 签名（内联）
     ├── module1514.js              #    知乎加密模块 1514（内联）
-    ├── pub_util.py                #    发布脚本公用工具：cookie / 标题（内联）
+    ├── weibo.py                   #    微博发布（Playwright，MD 转多段）
+    ├── toutiao.py                 #    头条号直发（requests + pyquery）
+    ├── pub_util.py                #    发布脚本公用工具：cookie / 标题 / Playwright（内联）
+    ├── stealth.min.js             #    Playwright stealth 注入（内联）
+    ├── patch_env_mock_wasm.js     #    WebAssembly 环境 mock（内联）
     └── distribute/                #    多平台分发引擎
         ├── distribute.ts          #       编排器
         ├── wechat-api.ts          #       公众号 API
@@ -345,6 +384,7 @@ AI 生成的内容必须诚实标注，不装人类。
 - [x] 录屏画布（网页演示 + 摄像头 + 提词器）
 - [x] 多平台一键分发（Chrome CDP + WeChat API）
 - [x] CSDN / 博客园 / 知乎 直发（requests API，自包含脚本）
+- [x] 微博 / 头条号 发布（Playwright / requests，自包含脚本）
 - [ ] 视频号发布
 - [ ] 更多 TTS 引擎
 - [ ] Web UI 管理面板

@@ -1,6 +1,6 @@
 ---
 name: content-pipeline
-description: 内容生产和分发统一管线。素材收集→出稿→排版→封面→朋友圈文案→多平台转换→一键分发。涵盖公众号写作、小红书轮播图、即刻文案、播客音频、品牌视频、Chrome CDP 自动发布，以及 CSDN / 博客园 / 知乎 requests 直发。
+description: 内容生产和分发统一管线。素材收集→出稿→排版→封面→朋友圈文案→多平台转换→一键分发。涵盖公众号写作、小红书轮播图、即刻文案、播客音频、品牌视频、Chrome CDP 自动发布，以及 CSDN / 博客园 / 知乎 requests 直发、微博（Playwright）与头条号（requests）发布。
 ---
 
 # 内容管线 Content Pipeline
@@ -93,6 +93,8 @@ description: 内容生产和分发统一管线。素材收集→出稿→排版�
 | "发布到 CSDN" / "发 CSDN" | CSDN 直发（requests API） |
 | "发布到博客园" | 博客园直发（requests API） |
 | "发布到知乎" | 知乎直发（requests API） |
+| "发布到微博" | 微博发布（Playwright，MD → 多段微博） |
+| "发布到头条号" / "发头条号" | 头条号直发（requests API） |
 
 ---
 
@@ -557,6 +559,31 @@ python3 "${SKILL_DIR}/scripts/zhihu.py" 文章.md [-i 1] [-n]
 - 发布成功后默认删除源 md（避免重复发帖）；`--dry-run`（cnblogs/zhihu）只预览不删除；
 - 三者都保留 `reg_subparser(subparsers)`，可被任意 argparse CLI 注册为 `csdn` / `cnblogs` / `zhihu` 子命令。
 
+### 微博 / 头条号 发布
+
+- **微博**（Playwright，可见浏览器）：`--input` 传 MD 文件或目录，每篇自动拆分为多条微博；
+  `--preview` 只预填不发布，`--max-chars` 控制每条长度。
+
+```bash
+pip install playwright browser_cookie3        # weibo
+playwright install chromium
+
+# 微博：默认发布，-p 预填不发布，-H 无头（无人工登录时需提供 --cookie）
+python3 "${SKILL_DIR}/scripts/weibo.py" --input 文章.md [--preview] [--max-chars 140]
+```
+
+- **头条号**（requests，参照 csdn）：默认直接发布，`-d` 存草稿，`-del <gid>` 删除草稿，
+  正文图片自动上传（支持本地相对路径 / base64 / http）。
+
+```bash
+pip install requests browser_cookie3 pyquery markdown   # toutiao（pillow 可选，图片转 PNG）
+
+python3 "${SKILL_DIR}/scripts/toutiao.py" 文章.md [-d] [-r 重试] [-n 数量]
+```
+
+两个脚本同样自包含（依赖同目录 `pub_util.py` / `stealth.min.js`），并保留
+`reg_subparser(subparsers)` 可注册为 `weibo` / `toutiao` 子命令。
+
 ---
 
 ## 品牌设计规范
@@ -662,7 +689,10 @@ font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 | `scripts/zhihu.py` | 知乎文章发布（requests + zse 签名） |
 | `scripts/zhihu_sign.py` | 知乎 x-zse 签名（自包含，依赖 quickjs） |
 | `scripts/module1514.js` | 知乎加密模块 1514 原代码（zhihu_sign 数据文件） |
-| `scripts/pub_util.py` | 发布脚本公用工具：浏览器 cookie 提取 / Markdown 标题 |
+| `scripts/pub_util.py` | 发布脚本公用工具：浏览器 cookie 提取 / Markdown 标题 / Playwright 驱动 |
+| `scripts/weibo.py` | 微博发布（Playwright，MD 转多段微博） |
+| `scripts/toutiao.py` | 头条号文章发布（requests + pyquery） |
+| `scripts/stealth.min.js` / `scripts/patch_env_mock_wasm.js` | 微博 Playwright stealth 注入资源 |
 | `scripts/distribute/distribute.ts` | 分发主编排器 |
 | `scripts/distribute/cdp-utils.ts` | 共享 CDP 工具 + Manifest 类型定义 |
 | `scripts/distribute/wechat-api.ts` | 公众号 API 客户端（token 管理、图片上传、草稿创建） |
