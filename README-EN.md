@@ -143,7 +143,7 @@ It automates the most time-consuming parts of content creation — just provide 
 | 🟡 Douyin | Chrome CDP | **Experimental** | Video publishing |
 | ⚪ Shipinhao | — | **Planned** | Coming soon |
 
-> **Four-level fallback**: L0 API push → L1 CDP auto → L2 assisted fill → L3 manual. Publishing succeeds no matter what.
+> **Fallback**: WeChat uses L0 API to create a draft, then stops at L3 manual if that API is missing, fails, or the run is a preview. It does not switch to a browser. Other CDP platforms use L1, then L2, then L3. Saving a draft is not publishing. See `references/wechat-draft-fidelity.md`.
 
 ---
 

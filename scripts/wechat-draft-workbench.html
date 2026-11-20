@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公众号手改稿离线工作台</title>
+<style>
+  body { margin: 0; background: #f6f6f6; color: #222; font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; line-height: 1.4; }
+  h2 { font-size: 17px; margin-top: 28px; }
+  p, li { margin: 8px 0; }
+  button, input, label { font: inherit; }
+  button { margin: 4px 8px 4px 0; padding: 6px 10px; }
+  .zone { min-height: 72px; padding: 12px; background: #fff; border: 1px dashed #999; }
+  .zone:focus { outline: 2px solid #333; }
+  pre { white-space: pre-wrap; background: #fff; padding: 12px; border: 1px solid #ddd; }
+  .note { color: #444; }
+</style>
+</head>
+<body>
+<main>
+  <h1>公众号手改稿离线工作台</h1>
+  <p class="note">这是一个不联网、不读账号的本地页面。它不自动读取剪贴板，也不把外部 HTML 插进页面执行。基线只能来自你这次粘贴或你选中的本地文件。存草稿不是发布。这里的检查不是编辑器重开，也不是手机阅读验收。</p>
+  <ol>
+    <li>在公众号正文里复制。</li>
+    <li>回到本页，聚焦接收区，粘贴。页面只取 text/html 和 text/plain。</li>
+    <li>先下载基线快照，再改底板或图片。</li>
+    <li>看审计。确认后，用按钮把修复稿写入剪贴板，再贴回编辑器。</li>
+    <li>保存并重开后，再粘贴一次做对照。首、中、尾要人工看。</li>
+  </ol>
+
+  <h2>1. 接收基线</h2>
+  <div id="paste-zone" class="zone" tabindex="0">聚焦这里后粘贴。原稿不会被插入这个页面。</div>
+  <p><label>或选择本地文件 <input id="file-input" type="file" accept=".html,.txt,text/html,text/plain"></label></p>
+  <p>
+    <button id="download-baseline" type="button">下载基线快照</button>
+  </p>
+
+  <h2>2. 只改指定样式或图片</h2>
+  <p>
+    <label>底板色 <input id="plate-color" value="#F2EDE3" size="10"></label>
+    <button id="apply-plate" type="button">套用连续底板</button>
+  </p>
+  <p class="note">默认色是 01fish 宣纸底。其他品牌改这个值。padding 固定为 1px 0，用来让兄弟块和列表的外边距仍落在同一块底色里。浏览器页面自己的背景不会写进载荷。</p>
+  <p>
+    <label>段落锚点 <input id="anchor" size="24"></label>
+    <label>原图 URL <input id="old-src" size="28"></label>
+    <label>新图 URL <input id="new-src" size="28"></label>
+  </p>
+  <p>
+    <button id="replace-image" type="button">按锚点替换图片</button>
+    <button id="add-image" type="button">按锚点增加图片</button>
+  </p>
+  <p class="note">锚点取自可见正文，且必须唯一。替换发生在锚点之后、下一个标题之前。对不上就停止，不按图片序号猜。父级底板不会被删掉。</p>
+
+  <h2>3. 审计与复制</h2>
+  <p>
+    <button id="audit" type="button">审计工作副本</button>
+    <button id="copy-payload" type="button">复制修复稿</button>
+    <button id="download-working" type="button">下载修复稿</button>
+  </p>
+  <h2>4. 重开后的对照</h2>
+  <div id="compare-zone" class="zone" tabindex="0">保存并重开后，把正文再复制，聚焦这里粘贴。</div>
+  <p><button id="audit-reopen" type="button">对比基线与重开稿</button></p>
+  <pre id="status">还没有载荷。</pre>
+  <pre id="preview"></pre>
+</main>
+<script>
+(function () {
+  "use strict";
+  var state = { baseline: "", working: "", plain: "", reopen: "" };
+  var statusEl = document.getElementById("status");
+  var previewEl = document.getElementById("preview");
+  var SKIP = { script: 1, style: 1, noscript: 1 };
+
+  function report(message) {
+    statusEl.textContent = message;
+  }
+
+  function stop(message) {
+    report(message + "\n已停止。没有改用纯文本冒充富文本，也没有访问网络。");
+  }
+
+  function visibleIndex(html) {
+    var chars = [];
+    var i = 0;
+    while (i < html.length) {
+      if (html.charAt(i) === "<") {
+        var end = html.indexOf(">", i);
+        if (end < 0) break;
+        var tag = html.slice(i, end + 1);
+        var nameMatch = /^<\/?\s*([a-zA-Z0-9]+)/.exec(tag);
+        var name = nameMatch ? nameMatch[1].toLowerCase() : "";
+        if (SKIP[name] && tag.charAt(1) !== "/") {
+          var rest = html.slice(end + 1);
+          var close = new RegExp("</" + name + "\\s*>", "i").exec(rest);
+          i = close ? end + 1 + close.index + close[0].length : end + 1;
+          continue;
+        }
+        i = end + 1;
+        continue;
+      }
+      chars.push([i, html.charAt(i)]);
+      i += 1;
+    }
+    return { visible: chars.map(function (item) { return item[1]; }).join(""), chars: chars };
+  }
+
+  function parsedDocument(html) {
+    return new DOMParser().parseFromString(html || "", "text/html");
+  }
+
+  function visibleText(html) {
+    var parsed = parsedDocument(html);
+    var blocked = parsed.querySelectorAll("script,style,noscript");
+    for (var i = 0; i < blocked.length; i += 1) blocked[i].remove();
+    return parsed.body ? parsed.body.textContent || "" : "";
+  }
+
+  function nonsws(value) {
+    return (value || "").replace(/\s+/g, "");
+  }
+
+  function sanitizeForCopy(html) {
+    var parsed = parsedDocument(html);
+    var blocked = parsed.querySelectorAll("script,iframe,object,embed,link,meta,base,form");
+    for (var i = 0; i < blocked.length; i += 1) blocked[i].remove();
+    var all = parsed.querySelectorAll("*");
+    for (var n = 0; n < all.length; n += 1) {
+      var el = all[n];
+      var attrs = el.attributes;
+      for (var a = attrs.length - 1; a >= 0; a -= 1) {
+        var attr = attrs[a];
+        var key = attr.name.toLowerCase();
+        if (key.indexOf("on") === 0 || key === "srcdoc") el.removeAttribute(attr.name);
+        if ((key === "href" || key === "src") && /^\s*javascript:/i.test(attr.value || "")) {
+          el.removeAttribute(attr.name);
+        }
+      }
+    }
+    return parsed.body ? parsed.body.innerHTML : "";
+  }
+
+  function requireWorking() {
+    if (!state.working) {
+      stop("还没有基线。");
+      return false;
+    }
+    return true;
+  }
+
+  function showPreview() {
+    previewEl.textContent = visibleText(state.working).slice(0, 2000);
+  }
+
+  function acceptPayload(html, plain) {
+    if (!html) {
+      stop("缺少 text/html。");
+      return;
+    }
+    state.baseline = html;
+    state.working = html;
+    state.plain = plain || "";
+    report("已保存为字符串。phone_verified=false。checked_live_editor=false。");
+    showPreview();
+  }
+
+  document.getElementById("paste-zone").addEventListener("paste", function (event) {
+    event.preventDefault();
+    var data = event.clipboardData;
+    if (!data) {
+      stop("浏览器没有给出 clipboardData。");
+      return;
+    }
+    acceptPayload(data.getData("text/html"), data.getData("text/plain"));
+  });
+
+  document.getElementById("file-input").addEventListener("change", function (event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      acceptPayload(String(reader.result || ""), "");
+    };
+    reader.onerror = function () { stop("读取本地文件失败。"); };
+    reader.readAsText(file);
+  });
+
+  function download(filename, content) {
+    var blob = new Blob([content], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById("download-baseline").addEventListener("click", function () {
+    if (!state.baseline) {
+      stop("没有可下载的基线。");
+      return;
+    }
+    download("wechat-draft-baseline.html", state.baseline);
+    report("已请求下载基线快照。");
+  });
+
+  document.getElementById("download-working").addEventListener("click", function () {
+    if (!requireWorking()) return;
+    download("wechat-draft-working.html", state.working);
+    report("已请求下载修复稿。这不是已经贴回编辑器。");
+  });
+
+  function plateColor() {
+    var value = document.getElementById("plate-color").value.trim();
+    if (!/^#[0-9A-Fa-f]{6}$/.test(value)) {
+      stop("底板色必须是 #RRGGBB。");
+      return "";
+    }
+    return "#" + value.slice(1).toUpperCase();
+  }
+
+  document.getElementById("apply-plate").addEventListener("click", function () {
+    if (!requireWorking()) return;
+    var color = plateColor();
+    if (!color) return;
+    var compact = state.working.trim().replace(/\s+/g, "").toLowerCase();
+    var marker = ("background-color:" + color + ";padding:1px 0").replace(/\s+/g, "").toLowerCase();
+    if (compact.indexOf("<section") === 0 && compact.indexOf(marker) !== -1) {
+      report("工作副本外层已经是这块底板。");
+      return;
+    }
+    state.working = '<section style="background-color:' + color + ';padding:1px 0;">\n' + state.working + "\n</section>";
+    report("已套用连续底板。正文文字没有改写。phone_verified=false。");
+    showPreview();
+  });
+
+  function locateAnchor(html, anchor) {
+    if (!anchor) throw new Error("缺少段落锚点，没有按序号替换");
+    var indexed = visibleIndex(html);
+    var found = indexed.visible.indexOf(anchor);
+    if (found < 0 || indexed.visible.indexOf(anchor, found + anchor.length) >= 0) {
+      throw new Error("锚点不是唯一段落，没有按序号猜");
+    }
+    var htmlEnd = indexed.chars[found + anchor.length - 1][0] + 1;
+    var nextHeading = /<h[1-3]\b/i.exec(html.slice(htmlEnd));
+    var limit = nextHeading ? htmlEnd + nextHeading.index : html.length;
+    return { htmlEnd: htmlEnd, limit: limit };
+  }
+
+  function locateImage(html, anchor, oldSrc) {
+    var located = locateAnchor(html, anchor);
+    var htmlEnd = located.htmlEnd;
+    var limit = located.limit;
+    var region = html.slice(htmlEnd, limit);
+    var re = /<img\b[^>]*>/gi;
+    var match;
+    var imgs = [];
+    while ((match = re.exec(region))) {
+      var tag = match[0];
+      var srcMatch = /\bsrc\s*=\s*(["'])(.*?)\1/i.exec(tag);
+      var src = srcMatch ? srcMatch[2] : "";
+      if (!oldSrc || src === oldSrc) imgs.push({ start: htmlEnd + match.index, end: htmlEnd + match.index + tag.length, src: src });
+    }
+    if (imgs.length !== 1) throw new Error("锚点范围内的图片不唯一");
+    return { image: imgs[0], htmlEnd: htmlEnd, limit: limit };
+  }
+
+  function setSrc(tag, src) {
+    if (/\bsrc\s*=/i.test(tag)) {
+      return tag.replace(/\bsrc\s*=\s*(["']).*?\1/i, function (full, quote) {
+        return "src=" + quote + src + quote;
+      });
+    }
+    return tag.slice(0, -1) + ' src="' + src + '">';
+  }
+
+  function safeSrc(src) {
+    if (!src || /[<>"'\s]/.test(src)) throw new Error("图片地址含有空白或标记");
+    return src;
+  }
+
+  document.getElementById("replace-image").addEventListener("click", function () {
+    if (!requireWorking()) return;
+    try {
+      var src = safeSrc(document.getElementById("new-src").value.trim());
+      var located = locateImage(state.working, document.getElementById("anchor").value, document.getElementById("old-src").value.trim());
+      var tag = state.working.slice(located.image.start, located.image.end);
+      state.working = state.working.slice(0, located.image.start) + setSrc(tag, src) + state.working.slice(located.image.end);
+      report("已替换这个锚点下的图片。父级标记还在。是否官方 CDN、以及手机是否看过，都还要另核。phone_verified=false。");
+      showPreview();
+    } catch (error) {
+      stop(error.message || "替换失败");
+    }
+  });
+
+  document.getElementById("add-image").addEventListener("click", function () {
+    if (!requireWorking()) return;
+    try {
+      var src = safeSrc(document.getElementById("new-src").value.trim());
+      var located = locateAnchor(state.working, document.getElementById("anchor").value);
+      var slice = state.working.slice(located.htmlEnd, located.limit);
+      var close = /<\/p\s*>/i.exec(slice);
+      if (!close) throw new Error("锚点后面没有段落结尾");
+      var at = located.htmlEnd + close.index + close[0].length;
+      var snippet = '<section style="text-align:center;"><img src="' + src + '" style="max-width:100%;height:auto;display:block;" /></section>';
+      state.working = state.working.slice(0, at) + snippet + state.working.slice(at);
+      report("已在锚点段落后加入图片，没有替换整篇。phone_verified=false。");
+      showPreview();
+    } catch (error) {
+      stop(error.message || "增加失败");
+    }
+  });
+
+  function imageSrcs(html) {
+    var out = [];
+    var re = /<img\b[^>]*>/gi;
+    var match;
+    while ((match = re.exec(html))) {
+      var srcMatch = /\bsrc\s*=\s*(["'])(.*?)\1/i.exec(match[0]);
+      out.push(srcMatch ? srcMatch[2] : "");
+    }
+    return out;
+  }
+
+  function boldSpans(html) {
+    var parsed = parsedDocument(html);
+    var nodes = parsed.querySelectorAll("strong,b");
+    var out = [];
+    for (var i = 0; i < nodes.length; i += 1) {
+      var color = "";
+      var current = nodes[i];
+      while (current && current.getAttribute) {
+        var style = current.getAttribute("style") || "";
+        var found = /(?:^|;)\s*color\s*:\s*([^;]+)/i.exec(style);
+        if (found) {
+          color = found[1].trim();
+          break;
+        }
+        current = current.parentElement;
+      }
+      out.push((nodes[i].textContent || "").trim() + " {" + color + "}");
+    }
+    return out;
+  }
+
+  function auditPair(before, after) {
+    var textSame = nonsws(visibleText(before)) === nonsws(visibleText(after));
+    var beforeImages = imageSrcs(before);
+    var afterImages = imageSrcs(after);
+    var lines = [
+      "phone_verified=false",
+      "checked_live_editor=false",
+      "automation_claims_phone_acceptance=false",
+      "非空白字符一致：" + (textSame ? "是" : "否"),
+      "基线图片：" + beforeImages.join(" | "),
+      "对照图片：" + afterImages.join(" | "),
+      "基线加粗：" + boldSpans(before).join(" | "),
+      "对照加粗：" + boldSpans(after).join(" | ")
+    ];
+    if (!textSame) lines.push("正文有非空白变化。不要用字数相同代替一致。");
+    return lines.join("\n");
+  }
+
+  document.getElementById("audit").addEventListener("click", function () {
+    if (!requireWorking()) return;
+    report(auditPair(state.baseline, state.working));
+  });
+
+  document.getElementById("compare-zone").addEventListener("paste", function (event) {
+    event.preventDefault();
+    var data = event.clipboardData;
+    if (!data || !data.getData("text/html")) {
+      stop("对照粘贴缺少 text/html。");
+      return;
+    }
+    state.reopen = data.getData("text/html");
+    report("已接收重开后的 text/html。还没有对比。");
+  });
+
+  document.getElementById("audit-reopen").addEventListener("click", function () {
+    if (!state.baseline || !state.reopen) {
+      stop("基线和重开稿都要先由你粘贴。");
+      return;
+    }
+    report(auditPair(state.baseline, state.reopen) + "\n这只比较两份本地字符串，不能代替手机预览。");
+  });
+
+  document.getElementById("copy-payload").addEventListener("click", function () {
+    if (!requireWorking()) return;
+    if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+      stop("这个浏览器没有 ClipboardItem 或 clipboard.write。");
+      return;
+    }
+    var html = sanitizeForCopy(state.working);
+    var plain = visibleText(html);
+    var item = new ClipboardItem({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([plain], { type: "text/plain" })
+    });
+    navigator.clipboard.write([item]).then(function () {
+      report("已把修复稿写入剪贴板。请在编辑器里手动粘贴、保存并重开。phone_verified=false。");
+    }).catch(function (error) {
+      stop("写入剪贴板被拒绝或失败：" + (error && error.name ? error.name : "Error"));
+    });
+  });
+})();
+</script>
+</body>
+</html>

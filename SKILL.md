@@ -232,7 +232,7 @@ cc 在对话中**主动识别有料瞬间**并自动记录，无需手动触发�
 → 04 升华/收束
 ```
 
-4. **读风格指南** — 写文章前**必须先读** `references/writing-style.md`。这是从鱼头头 9 篇已发布文章中逆向工程出的真实写作模式，不是理论指南。核心要点：极短段落（1-3句）、单句成段做"钉子"、口语化动词、"不是A是B"金句句式、数字制造反差、表格优先于段落。
+4. **读风格指南** — 写文章前**必须先读** `references/writing-style.md`。这是从鱼头头 9 篇已发布文章中逆向工程出的真实写作模式，不是理论指南。核心要点：极短段落（1-3句）、单句成段做"钉子"、口语化动词、"不是A是B"金句句式、数字制造反差。Markdown 稿里可以用表格整理事实；写进公众号正文时不要输出 HTML 表格，改成配图（→ 读 `references/wechat-draft-fidelity.md`）。
 5. **写文章** — 按对应框架 + 风格指南写文章。写完后用风格指南末尾的"按类型写作清单"自检一遍。
 6. **保存** — 保存 Markdown 文件
 7. **排版** — 调用排版工具生成 HTML 预览（01fish 主题）
@@ -254,7 +254,7 @@ cc 在对话中**主动识别有料瞬间**并自动记录，无需手动触发�
    - `wechat.html`（**必填**）：排版后的 `_preview.html` 路径（配图位置用 `<!-- IMAGE:文件名.png -->` 标记）
    - `wechat.cover_image`（**必填**）：封面 PNG 路径
    - `wechat.title`（**必填**）：文章标题
-   - `wechat.author`：作者名（默认 `01fish`）
+   - `wechat.author`：用户给出的真实署名。没有给出就留空，排版时不要改成 AI 或模型名。AI 实际写了正文时，正文里的诚实标注照旧保留。
    - `wechat.digest`：文章摘要（120 字内）
    - `wechat.images`：配图 PNG 路径列表（按文章中出现的顺序排列，分发脚本会上传并插入到对应占位符位置）
    - `wechat.markdown`（可选）：文章 Markdown 路径（仅作记录，不再用于转换）
@@ -272,7 +272,9 @@ python3 md2wechat_formatter.py [文章路径] --theme [主题] --font-size [字�
 推荐主题：`01fish`（01fish 品牌色，默认）、`chinese`（中国风）、`apple`（极简优雅）
 推荐字号：`medium`（15px 默认）、`large`（16px 长文推荐）
 
-**01fish 主题说明**：基于 chinese 主题，使用 01fish 品牌色（墨绿 #1A3328 + 鱼红 #C44536 + 宣纸底 #F2EDE3）
+**01fish 主题说明**：01fish 使用墨绿 #1A3328、鱼红 #C44536、宣纸底 #F2EDE3。正文字号 15px、行高 2，H2 20px，H3 17px，图注 13px。已经加粗的正文同时用鱼红，标题用墨绿。这些值只属于 01fish；`chinese` 和 `apple` 继续用各自的主题变量，不套这套色。
+
+公众号正文的粘贴片段要包在同一个带内联 `background-color` 和 `padding:1px 0` 的 `section` 里。只给各段上色时，段与段、列表项之间的 margin 仍会露出页面底色。预览页 `body` 的背景不能当作已经粘贴进去的背景。细则 → `references/wechat-draft-fidelity.md`。
 
 ---
 
@@ -501,14 +503,16 @@ npx -y bun "${SKILL_DIR}/scripts/distribute/distribute.ts" --manifest /path/to/m
 
 ### 四级降级
 
-| 级别 | 模式 | 触发条件 |
-|------|------|---------|
-| L0 | API 直推 | 公众号 API 直接推草稿箱，无需 Chrome |
-| L1 | 自动发布 | CDP 完全自动化 |
-| L2 | 辅助发布 | 登录态失效/选择器失效/`--preview` |
-| L3 | 手动模式 | CDP 连接失败 |
+| 级别 | 模式 | 谁在用 |
+|------|------|--------|
+| L0 | API 新建草稿 | 仅公众号。不是发布，也不是更新一篇已经存在的稿 |
+| L1 | CDP 自动提交 | 小红书、即刻、小宇宙、抖音 |
+| L2 | CDP 预填后由人确认 | 上述 CDP 平台遇到登录态失效、选择器失效，或显式 `--preview` |
+| L3 | 手动 | 公众号 API 不可用或预览；其他平台的浏览器起不来 |
 
-公众号优先 L0（API），凭证缺失或失败时自动降级 L3（手动）。
+公众号先走 L0。凭证没配、调用失败，或这次是预览，就停在 L3，把文件留给人复制。已经连上的 API 失败后，不要自动改走浏览器或 CDP；只有用户当次明确要求，才可以另走浏览器。
+
+正在编辑器里改的稿，以当前富文本为基线，用 `scripts/wechat-draft-workbench.html` 备份后再改。不要拿旧 Markdown 覆盖它，也不要为此再 `draft/add` 一篇新稿。保存草稿不是发布。
 
 ### 公众号 API 模式说明
 
@@ -526,8 +530,10 @@ npx -y bun "${SKILL_DIR}/scripts/distribute/distribute.ts" --manifest /path/to/m
 2. 从 `_preview.html` 提取文章内容（`extractArticleContent`）
 3. 修复 WeChat 不兼容的 HTML 结构（`fixHtmlForWechat`）
 4. 扫描并上传本地图片到微信 CDN（`uploadLocalImagesInHtml`）
-5. 上传封面图获取 `thumb_media_id`
-6. 调用 `draft/add` 创建草稿
+5. 只在 `<!-- IMAGE:文件名 -->` 这个段落锚点上替换配图。没有锚点就停止，不按列表顺序接到文末
+6. 正文图片仍是 `file:`、`data:` 或非官方 CDN 时，不创建草稿
+7. 上传已经裁成约 2.35:1 的 `cover_image`。没有这张图就停止，不用正文图列表的第一张代替。方缩略图另裁，两边都不拉伸
+8. 调用 `draft/add` 新建草稿。这一步不是发布，也不是更新已有草稿
 
 ---
 
@@ -633,6 +639,8 @@ font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 | `scripts/distribute/cdp-utils.ts` | 共享 CDP 工具 + Manifest 类型定义 |
 | `scripts/distribute/wechat-api.ts` | 公众号 API 客户端（token 管理、图片上传、草稿创建） |
 | `scripts/distribute/platforms/*.ts` | 各平台发布模块 |
+| `scripts/wechat_fidelity.py` | 底板、表格门禁、锚点换图和字段审计。通过不等于手机已验收 |
+| `scripts/wechat-draft-workbench.html` | 零依赖离线页：手动粘贴备份、改样式或图片、再复制回去 |
 
 ---
 
@@ -654,6 +662,7 @@ cc 按需读取，不要一次性加载所有 reference。
 | 播客节目封面 | `references/podcast-cover-template.md` — 3000×3000 正方形封面 HTML 模板 |
 | 史记罗生门栏目 | `references/shiji-luoshengmen.md` — 栏目品牌设定 + AI侦探风格 + 脚本结构 |
 | 分发到各平台 | `references/distribute-platforms.md` — 平台配置 + manifest 格式 + 降级策略 |
+| 公众号正文保真 | `references/wechat-draft-fidelity.md` — 连续底板、手改稿、审计、无 HTML 表格、换图和署名边界 |
 | 生成录屏画布 | `references/video-canvas-template.md` — 录屏画布模板（全屏网页演示+露脸+提词器+录制） |
 
 ---
@@ -667,6 +676,9 @@ cc 按需读取，不要一次性加载所有 reference。
 | 文章太长（>5000字） | 精选核心，控制 10 张以内 |
 | 导出图片模糊 | 检查 SCALE=2，浏览器缩放 100% |
 | manifest 不存在 | 提示先运行内容生成 |
-| Chrome 启动失败 | 降级 L3（手动模式） |
+| Chrome 启动失败 | 使用 CDP 的平台降级 L3（手动模式）。公众号本来就不应因此改走浏览器 |
+| 公众号 API 失败 | 停在 L3 手动。不自动改走浏览器，除非用户当次明确要求 |
+| 手改过的公众号正文 | 用 `scripts/wechat-draft-workbench.html` 先备份。不要用旧 Markdown 覆盖 |
+| Grok Bot 操作真实网页 | 用 computerUse。不要用 Shell、CDP 或 Playwright 驱动已登录会话，不要读取 cookies 或内部接口。这不删除其他环境里的分发 CLI |
 | IndexTTS2 模型加载失败 | 检查 checkpoints 目录和 infer_v2 导入 |
 | TTS 生成失败 | 只输出脚本文本，提示手动录制 |

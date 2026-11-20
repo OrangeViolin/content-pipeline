@@ -15,6 +15,14 @@ import os
 import re
 import sys
 
+from wechat_fidelity import (
+    FISH_PRESET,
+    assess_body,
+    defer_html_tables,
+    extract_paste_payload,
+    wrap_theme_plate,
+)
+
 try:
     import markdown as md_lib
     HAS_MARKDOWN = True
@@ -41,19 +49,24 @@ THEMES = {
     # 01fish — 公众号「01fish」专属配色
     # 取意：墨绿 #1A3328 + 鱼红 #C44536 + 宣纸底 #F2EDE3
     '01fish': {
-        'bg':               '#F2EDE3',
+        'bg':               FISH_PRESET['paper'],
         'text':             '#333333',
-        'heading':          '#1A3328',
-        'accent':           '#C44536',
-        'link':             '#C44536',
+        'heading':          FISH_PRESET['ink'],
+        'accent':           FISH_PRESET['fish_red'],
+        'link':             FISH_PRESET['fish_red'],
+        'line_height':      FISH_PRESET['line_height'],
+        'h2_size':          f"{FISH_PRESET['h2_px']}px",
+        'h3_size':          f"{FISH_PRESET['h3_px']}px",
+        'caption_size':     f"{FISH_PRESET['caption_px']}px",
+        'bold_color':       FISH_PRESET['fish_red'],
         'code_bg':          '#f0ece4',
         'code_border':      '#ddd8ce',
-        'code_text':        '#1A3328',
-        'pre_bg':           '#1A3328',
+        'code_text':        FISH_PRESET['ink'],
+        'pre_bg':           FISH_PRESET['ink'],
         'pre_border':       'rgba(196,69,54,0.15)',
-        'pre_text':         '#F2EDE3',
+        'pre_text':         FISH_PRESET['paper'],
         'syntax': {
-            'keyword':  '#C44536',   # 鱼红 — 关键字
+            'keyword':  FISH_PRESET['fish_red'],   # 鱼红 — 关键字
             'string':   '#A8C97F',   # 苔绿 — 字符串
             'comment':  '#7A8C80',   # 苔灰 — 注释
             'number':   '#D4A76A',   # 暖金 — 数字
@@ -61,13 +74,13 @@ THEMES = {
             'type':     '#B48EAD',   # 藤紫 — 类型
             'operator': '#7A8C80',   # 苔灰 — 操作符
         },
-        'blockquote_border':'#1A3328',
+        'blockquote_border':FISH_PRESET['ink'],
         'blockquote_bg':    '#f0ece4',
-        'table_header_bg':  '#1A3328',
-        'table_header_text':'#F2EDE3',
+        'table_header_bg':  FISH_PRESET['ink'],
+        'table_header_text':FISH_PRESET['paper'],
         'table_stripe':     '#f0ece4',
         'table_border':     '#D4DDD7',
-        'hr_color':         '#C44536',
+        'hr_color':         FISH_PRESET['fish_red'],
     },
     'chinese': {
         'bg':               '#F9F5F1',
@@ -115,8 +128,27 @@ FONT_SIZES = {
 
 def build_css(theme_name, font_size_name):
     t = THEMES[theme_name]
-    fs = FONT_SIZES[font_size_name]
-    lh = '1.8' if font_size_name == 'large' else '1.75'
+    if theme_name == '01fish' and font_size_name == 'medium':
+        fs = f"{FISH_PRESET['body_px']}px"
+    else:
+        fs = FONT_SIZES[font_size_name]
+    if 'line_height' in t:
+        lh = str(t['line_height'])
+    else:
+        lh = '1.8' if font_size_name == 'large' else '1.75'
+    h2_size = t.get('h2_size', '20px')
+    h3_size = t.get('h3_size', '17px')
+    bold_color = t.get('bold_color', t['accent'])
+    caption_rule = ''
+    if t.get('caption_size'):
+        caption_rule = f"""
+.content figcaption, .content .img-caption {{
+  font-size: {t['caption_size']};
+  line-height: 1.6;
+  color: #666;
+  text-align: center;
+}}
+"""
     return f"""
 /* md2wechat_formatter — {theme_name} theme */
 * {{ margin: 0; padding: 0; }}
@@ -156,7 +188,7 @@ body {{
   letter-spacing: 1px;
 }}
 .content h2 {{
-  font-size: 20px;
+  font-size: {h2_size};
   font-weight: 700;
   color: {t['heading']};
   margin: 32px 0 14px;
@@ -165,7 +197,7 @@ body {{
   letter-spacing: 0.5px;
 }}
 .content h3 {{
-  font-size: 17px;
+  font-size: {h3_size};
   font-weight: 600;
   color: {t['heading']};
   margin: 24px 0 10px;
@@ -187,7 +219,7 @@ body {{
   word-break: break-all;
 }}
 .content strong {{
-  color: {t['accent']};
+  color: {bold_color};
   font-weight: 600;
 }}
 .content em {{
@@ -291,7 +323,7 @@ body {{
   border-radius: 4px;
   margin: 8px 0;
 }}
-"""
+{caption_rule}"""
 
 # ─── Syntax Highlighting ───
 
@@ -784,6 +816,16 @@ def sanitize_for_wechat(html_str, theme=None):
 
 # ─── HTML Assembly ───
 
+def render_markdown(md_text, theme_name='01fish', font_size_name='medium', title=''):
+    """Build a preview document. Tables become pending image blocks, then one plate wraps the body."""
+    theme_dict = THEMES[theme_name]
+    content_html = convert_md_to_html(md_text, theme_dict)
+    content_html, tables = defer_html_tables(content_html)
+    content_html = wrap_theme_plate(content_html, theme_dict['bg'])
+    css = build_css(theme_name, font_size_name)
+    return build_html(content_html, css, title), tables
+
+
 def build_html(content_html, css, title=''):
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -842,11 +884,8 @@ def main():
         if h1:
             title = h1.group(1).strip()
 
-    # Convert
-    theme_dict = THEMES[args.theme]
-    content_html = convert_md_to_html(md_text, theme_dict)
-    css = build_css(args.theme, args.font_size)
-    full_html = build_html(content_html, css, title)
+    # Convert. New WeChat body HTML does not keep <table>; facts stay in a pending image block.
+    full_html, _tables = render_markdown(md_text, args.theme, args.font_size, title)
 
     # Inline CSS if requested (for WeChat API which strips <style> blocks)
     if args.inline:
@@ -886,6 +925,22 @@ def main():
     print(f'  theme={args.theme}  font-size={args.font_size} ({FONT_SIZES[args.font_size]})')
     if not HAS_MARKDOWN:
         print('  ⚠ 使用内置转换器（安装 markdown 包可获得更好效果：pip3 install markdown）')
+    try:
+        gate = assess_body(extract_paste_payload(full_html))
+    except ValueError as exc:
+        print(f'  结构门禁：无法读取粘贴载荷（{exc}）')
+    else:
+        blocked = (
+            gate['blocked_by_html_table']
+            or gate['blocked_by_pending_table_image']
+            or gate['blocked_by_non_cdn_image']
+            or gate['article_flattened_to_images']
+        )
+        if blocked:
+            print('  结构门禁：未通过。' + ' '.join(gate['actions']))
+        else:
+            print('  结构门禁：未见 HTML 表格。这不是手机阅读验收。')
+        print('  自动检查没有保存草稿，也没有重开编辑器或手机预览。')
 
 
 if __name__ == '__main__':

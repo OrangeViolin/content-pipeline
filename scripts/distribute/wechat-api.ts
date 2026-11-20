@@ -166,6 +166,38 @@ export async function uploadCoverImage(token: string, imagePath: string): Promis
 
 // ─── HTML Processing ───
 
+const OFFICIAL_CDN_HOSTS = new Set(['mmbiz.qpic.cn', 'mmbiz.qlogo.cn']);
+
+/** True only for https URLs on the official WeChat image hosts. */
+export function isOfficialWechatCdn(src: string): boolean {
+  try {
+    const url = new URL(src);
+    return url.protocol === 'https:' && OFFICIAL_CDN_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Image src values that cannot count as an uploaded draft image. */
+export function findNonCdnImages(html: string): string[] {
+  const out: string[] = [];
+  const re = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html)) !== null) {
+    if (!isOfficialWechatCdn(match[1])) out.push(match[1]);
+  }
+  return out;
+}
+
+/** Paragraph anchors are HTML comments. Missing anchors must not fall through to list order. */
+export function planImageInsertions(html: string, fileNames: string[]): { missing: string[] } {
+  const missing = fileNames.filter((name) => {
+    const base = name.replace(/\.[^.]+$/, '');
+    return !html.includes(`<!-- IMAGE:${name} -->`) && !html.includes(`<!-- IMAGE:${base} -->`);
+  });
+  return { missing };
+}
+
 /** Fix HTML structures that WeChat cannot render properly */
 export function fixHtmlForWechat(html: string): string {
   let fixed = html;
@@ -307,6 +339,7 @@ export function processHtmlWithImages(
 
 // ─── Draft Creation ───
 
+/** Create one new draft. This does not update an existing draft and does not publish. */
 export async function createDraft(
   token: string,
   article: {
@@ -323,6 +356,7 @@ export async function createDraft(
     articles: [
       {
         title: article.title,
+        // Keep a blank byline when the caller did not supply one. Do not invent an AI author.
         author: article.author || '',
         digest: article.digest || '',
         content: article.content,
@@ -401,66 +435,60 @@ export async function publishViaApi(manifest: Manifest): Promise<{ mediaId: stri
   // 5. Upload local images referenced in HTML to WeChat CDN
   let contentWithCdnImages = await uploadLocalImagesInHtml(finalContent, token);
 
-  // 5.5 Upload manifest images and insert into article content
+  // 5.5 Upload manifest images at paragraph anchors. Never append by list order.
   if (wechatData.images && wechatData.images.length > 0) {
+    const missingFiles = wechatData.images.filter((imgPath) => !fs.existsSync(imgPath));
+    if (missingFiles.length > 0) {
+      throw new Error(
+        `Image file missing. Refusing to shift later images forward: ${missingFiles.join(', ')}`,
+      );
+    }
+    const names = wechatData.images.map((imgPath) => path.basename(imgPath));
+    const anchorPlan = planImageInsertions(contentWithCdnImages, names);
+    if (anchorPlan.missing.length > 0) {
+      throw new Error(
+        `Refusing to insert images by list order. No paragraph anchor for: ${anchorPlan.missing.join(', ')}. ` +
+        'Add <!-- IMAGE:filename --> beside the paragraph. An API failure does not switch to a browser.',
+      );
+    }
+
     console.log(`  [wechat-api] Uploading ${wechatData.images.length} article image(s)...`);
     const uploadedImages: Array<{ cdnUrl: string; fileName: string }> = [];
 
     for (const imgPath of wechatData.images) {
-      if (!fs.existsSync(imgPath)) {
-        console.warn(`  [wechat-api]   ✗ Image not found: ${imgPath}`);
-        continue;
-      }
       try {
         const cdnUrl = await uploadContentImage(token, imgPath);
         uploadedImages.push({ cdnUrl, fileName: path.basename(imgPath) });
         console.log(`  [wechat-api]   ✓ ${path.basename(imgPath)}`);
       } catch (err) {
-        console.warn(`  [wechat-api]   ✗ ${path.basename(imgPath)}: ${err instanceof Error ? err.message : err}`);
+        throw new Error(
+          `uploadimg failed for ${path.basename(imgPath)}: ${err instanceof Error ? err.message : err}. ` +
+          'file/data preview is not draft success.',
+        );
       }
     }
 
-    if (uploadedImages.length > 0) {
-      // Strategy: insert images at matching placeholder comments in HTML,
-      // or append them at the end of the article if no placeholders found.
-      //
-      // Placeholder format in HTML: <!-- IMAGE:filename.png -->
-      // If manifest provides image_positions (map of filename → CSS selector or section title),
-      // we try to insert after matching elements.
-      let insertedCount = 0;
-
-      for (const { cdnUrl, fileName } of uploadedImages) {
-        const imgTag = `<section style="text-align:center;margin:20px 0;"><img src="${cdnUrl}" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;" /></section>`;
-
-        // Try placeholder comment: <!-- IMAGE:配图-1.png -->
-        const placeholder = `<!-- IMAGE:${fileName} -->`;
-        if (contentWithCdnImages.includes(placeholder)) {
-          contentWithCdnImages = contentWithCdnImages.replace(placeholder, imgTag);
-          insertedCount++;
-          continue;
-        }
-
-        // Try matching by partial filename (without extension)
-        const baseName = fileName.replace(/\.[^.]+$/, '');
-        const altPlaceholder = `<!-- IMAGE:${baseName} -->`;
-        if (contentWithCdnImages.includes(altPlaceholder)) {
-          contentWithCdnImages = contentWithCdnImages.replace(altPlaceholder, imgTag);
-          insertedCount++;
-          continue;
-        }
-      }
-
-      // If no placeholders were found, append all images at the end (before closing)
-      if (insertedCount === 0) {
-        console.log(`  [wechat-api] No image placeholders found in HTML, appending ${uploadedImages.length} image(s) at end`);
-        const allImgTags = uploadedImages
-          .map(({ cdnUrl }) => `<section style="text-align:center;margin:20px 0;"><img src="${cdnUrl}" style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:8px;" /></section>`)
-          .join('\n');
-        contentWithCdnImages += '\n' + allImgTags;
+    for (const { cdnUrl, fileName } of uploadedImages) {
+      const imgTag = `<section style="text-align:center;margin:20px 0;"><img src="${cdnUrl}" style="max-width:100%;height:auto;display:block;margin:0 auto;" /></section>`;
+      const placeholder = `<!-- IMAGE:${fileName} -->`;
+      const baseName = fileName.replace(/\.[^.]+$/, '');
+      const altPlaceholder = `<!-- IMAGE:${baseName} -->`;
+      if (contentWithCdnImages.includes(placeholder)) {
+        contentWithCdnImages = contentWithCdnImages.replace(placeholder, imgTag);
+      } else if (contentWithCdnImages.includes(altPlaceholder)) {
+        contentWithCdnImages = contentWithCdnImages.replace(altPlaceholder, imgTag);
       } else {
-        console.log(`  [wechat-api] Inserted ${insertedCount}/${uploadedImages.length} image(s) at placeholder positions`);
+        throw new Error(`Anchor disappeared before insert: ${fileName}`);
       }
     }
+  }
+
+  const nonCdn = findNonCdnImages(contentWithCdnImages);
+  if (nonCdn.length > 0) {
+    throw new Error(
+      'Draft image success requires an official WeChat CDN URL (https://mmbiz.qpic.cn or https://mmbiz.qlogo.cn). ' +
+      `Still not uploaded: ${nonCdn.join(', ')}. file/data URLs are local preview only.`,
+    );
   }
 
   // 6. Upload cover image (required for draft)
@@ -470,11 +498,11 @@ export async function publishViaApi(manifest: Manifest): Promise<{ mediaId: stri
   if (coverPath && fs.existsSync(coverPath)) {
     console.log('  [wechat-api] Uploading cover image...');
     thumbMediaId = await uploadCoverImage(token, coverPath);
-  } else if (wechatData.images && wechatData.images.length > 0 && fs.existsSync(wechatData.images[0])) {
-    console.log('  [wechat-api] No cover image specified, using first content image...');
-    thumbMediaId = await uploadCoverImage(token, wechatData.images[0]);
   } else {
-    throw new Error('No cover image available. Provide cover_image in manifest or ensure article has images.');
+    throw new Error(
+      'No cover image available. Provide wechat.cover_image already cropped near 2.35:1. ' +
+      'A square thumbnail is a separate crop. This client does not reuse a content image by list position and does not stretch either crop.',
+    );
   }
 
   // 7. Create draft
