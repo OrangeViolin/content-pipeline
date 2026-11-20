@@ -311,7 +311,7 @@ python3 md2wechat_formatter.py [文章路径] --theme 01fish --font-size medium 
 | 语录气泡 | 引用、对话、规训话术 |
 | 大数字 + 描述 | 数据亮点、统计 |
 | 时间线 | 人生线、历史进程 |
-| 表格/矩阵 | 多维信息对比 |
+| 表格/矩阵 | 多维信息对比。这是配图画布上的布局；公众号正文里不保留 HTML 表格，见 `wechat-draft-fidelity.md` |
 | 金句终页 | 文末收束、核心观点 |
 
 ---

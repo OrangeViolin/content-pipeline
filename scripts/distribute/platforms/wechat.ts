@@ -2,8 +2,9 @@
  * WeChat Official Account (公众号) publisher.
  *
  * Degradation strategy:
- *   L0: WeChat API → push directly to drafts (no browser needed)
- *   L3: Manual → output file path for copy-paste
+ *   L0: WeChat API → create a new draft (no browser needed). This is not publish.
+ *   L3: Manual → output the file path. Do not open Chrome when the API was
+ *       configured and failed, unless the user explicitly asks for a browser.
  */
 
 import fs from 'node:fs';
@@ -40,14 +41,16 @@ export async function publishToWechat(manifest: Manifest, preview: boolean): Pro
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       console.log(`  [wechat] API mode failed: ${reason}`);
+      console.log('  [wechat] Staying on manual (L3). Not opening a browser.');
     }
   }
 
-  // L3: Manual fallback — no more CDP automation
+  // L3: Manual fallback. A connected API failure does not continue into CDP.
   const filePath = hasHtml ? wechatData.html : wechatData.markdown;
+  const why = preview ? 'Preview mode keeps the editor manual.' : 'API draft was not created.';
   return {
     platform: 'wechat',
     status: 'manual',
-    message: `API publish failed or preview mode. File: ${filePath}`,
+    message: `${why} Not switching to a browser. File: ${filePath}`,
   };
 }

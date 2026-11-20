@@ -57,7 +57,7 @@
       "html": "/path/to/article_preview.html",
       "cover_image": "/path/to/cover.png",
       "title": "文章标题",
-      "author": "01fish",
+      "author": "",
       "digest": "文章摘要（120字内）",
       "images": ["/path/to/illustration1.png"]
     },
@@ -78,6 +78,8 @@
 }
 ```
 
+`wechat.author` 只填写用户给出的真实署名。上面的空字符串表示未提供，不要改成模型名。AI 实际写了正文时，正文里的诚实标注照旧保留。`draft/add` 只新建草稿，不更新正在编辑的稿，也不是发布。
+
 ---
 
 ## 执行流程
@@ -94,14 +96,14 @@
 
 **执行顺序（避免 Chrome 端口冲突）：**
 
-1. **公众号**（wechat）→ 调用 baoyu-post-to-wechat
+1. **公众号**（wechat）→ L0 API 新建草稿。失败或预览则 L3 手动，不启动 Chrome
 2. **小红书**（xhs）→ Chrome CDP 自动发布
 3. **即刻**（jike）→ Chrome CDP 自动发布
 4. **小宇宙**（xiaoyuzhou）→ Chrome CDP 自动发布
 5. **抖音**（douyin）→ Chrome CDP 自动发布
 6. **视频号**（shipinhao）→ Chrome CDP 自动发布
 
-每个平台完成后关闭 Chrome，再启动下一个。
+使用了 Chrome 的平台完成后关闭 Chrome，再启动下一个。公众号默认不打开浏览器。
 
 ### 第 4 步：汇报结果
 
@@ -118,15 +120,17 @@
 | L2 | 辅助发布 | 打开创作者页面，预填内容，用户手动确认提交 |
 | L3 | 手动模式 | 输出文件路径和文案，用户自行复制粘贴 |
 
-**公众号执行策略：** 优先 L0（API），API 凭证缺失或调用失败时降级 L1（CDP）
+**公众号执行策略：** 优先 L0（API 新建草稿，不是发布）。凭证没配、调用失败，或 `--preview`，停在 L3 手动。已经连上的 API 失败后，不自动改走浏览器或 CDP；只有用户当次明确要求，才可以另走浏览器。
 
-**降级触发条件：**
-- API 凭证未配置 → L0 降级为 L1
-- API 调用失败 → L0 降级为 L1
+**其他 CDP 平台的降级触发条件：**
 - 登录态失效 → L2（打开登录页，等待用户登录后重试）
 - 选择器失效（平台 UI 改版）→ L2
-- CDP 连接失败 → L3
-- `--preview` 参数 → 强制 L2
+- CDP 连接失败或 Chrome 起不来 → L3
+- `--preview` → L2，只预填，不代点发布
+
+公众号正文的底板、手改备份、无 HTML 表格和换图规则见 `wechat-draft-fidelity.md`。
+
+**运行环境：** Grok Bot 操作真实网页桌面时用 computerUse，不用 Shell、CDP 或 Playwright 驱动已登录会话，不读取 cookies 或内部接口。这不删除其他环境中的 `distribute.ts` 与 `wechat-api.ts`。
 
 ---
 
@@ -136,7 +140,7 @@
 
 | 平台 | Profile 路径 |
 |------|-------------|
-| 公众号 | `~/.local/share/wechat-browser-profile` |
+| 公众号 | `~/.local/share/wechat-browser-profile`（默认不用；只有用户当次明确要求浏览器时才用） |
 | 小红书 | `~/.local/share/xiaohongshu-browser-profile` |
 | 即刻 | `~/.local/share/jike-browser-profile` |
 | 小宇宙 | `~/.local/share/xiaoyuzhou-browser-profile` |
